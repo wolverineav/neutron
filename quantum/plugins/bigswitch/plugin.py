@@ -56,6 +56,7 @@ from quantum import context as qcontext
 from quantum.db import api as db
 from quantum.db import db_base_plugin_v2
 from quantum.db import dhcp_rpc_base
+from quantum.db import l3_db
 from quantum.db import models_v2
 from quantum.openstack.common import cfg
 from quantum.openstack.common import log as logging
@@ -241,7 +242,10 @@ class RpcProxy(dhcp_rpc_base.DhcpRpcCallbackMixin):
         return q_rpc.PluginRpcDispatcher([self])
 
 
-class QuantumRestProxyV2(db_base_plugin_v2.QuantumDbPluginV2):
+class QuantumRestProxyV2(db_base_plugin_v2.QuantumDbPluginV2,
+                         l3_db.L3_NAT_db_mixin):
+
+    supported_extension_aliases = ["router"]
 
     def __init__(self):
         LOG.info('QuantumRestProxy: Starting plugin. Version=%s' %

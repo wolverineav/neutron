@@ -56,11 +56,11 @@ from quantum import context as qcontext
 from quantum.db import api as db
 from quantum.db import db_base_plugin_v2
 from quantum.db import dhcp_rpc_base
-from quantum.db import l3_db
 from quantum.db import models_v2
 from quantum.openstack.common import cfg
 from quantum.openstack.common import log as logging
 from quantum.openstack.common import rpc
+from quantum.plugins.bigswitch import router_db
 from quantum.plugins.bigswitch.version import version_string_with_vcs
 
 
@@ -243,7 +243,7 @@ class RpcProxy(dhcp_rpc_base.DhcpRpcCallbackMixin):
 
 
 class QuantumRestProxyV2(db_base_plugin_v2.QuantumDbPluginV2,
-                         l3_db.L3_NAT_db_mixin):
+                         router_db.Router_db_mixin):
 
     supported_extension_aliases = ["router"]
 
@@ -323,11 +323,15 @@ class QuantumRestProxyV2(db_base_plugin_v2.QuantumDbPluginV2,
                         "supported by this plugin. Ignoring setting for "
                         "network %s", net_name)
 
-        # create in DB
-        new_net = super(QuantumRestProxyV2, self).create_network(context,
-                                                                 network)
+        session = context.session
+        with session.begin(subtransactions=True):
+            # create network in DB
+            new_net = super(QuantumRestProxyV2, self).create_network(context,
+                                                                     network)
+            self._process_l3_create(context, network['network'], new_net['id'])
+            self._extend_network_dict_l3(context, new_net)
 
-        # create on networl ctrl
+        # create network on the network controller
         try:
             resource = NET_RESOURCE_PATH % tenant_id
             data = {
@@ -381,11 +385,15 @@ class QuantumRestProxyV2(db_base_plugin_v2.QuantumDbPluginV2,
                             "supported by this plugin. Ignoring setting for "
                             "network %s", net_name)
 
-        # update DB
-        orig_net = super(QuantumRestProxyV2, self).get_network(context, net_id)
-        tenant_id = orig_net["tenant_id"]
-        new_net = super(QuantumRestProxyV2, self).update_network(
-            context, net_id, network)
+        session = context.session
+        with session.begin(subtransactions=True):
+            orig_net = super(QuantumRestProxyV2, self).get_network(context,
+                                                                   net_id)
+            tenant_id = orig_net["tenant_id"]
+            new_net = super(QuantumRestProxyV2, self).update_network(
+                context, net_id, network)
+            self._process_l3_update(context, network['network'], net_id)
+            self._extend_network_dict_l3(context, new_net)
 
         # update network on network controller
         if new_net["name"] != orig_net["name"]:
@@ -571,7 +579,7 @@ class QuantumRestProxyV2(db_base_plugin_v2.QuantumDbPluginV2,
         # return new_port
         return new_port
 
-    def delete_port(self, context, port_id):
+    def delete_port(self, context, port_id, l3_port_check=True):
         """Delete a port.
         :param context: quantum api request context
         :param id: UUID representing the port to delete.
@@ -594,6 +602,11 @@ class QuantumRestProxyV2(db_base_plugin_v2.QuantumDbPluginV2,
             ret = self.servers.delete(resource)
             if not self.servers.action_success(ret):
                 raise RemoteRestError(ret[2])
+
+            # if needed, check to see if this is a port owned by
+            # and l3-router.  If so, we should prevent deletion.
+            if l3_port_check:
+                self.prevent_l3_port_deletion(context, port_id)
 
             if port.get("device_id"):
                 self._unplug_interface(context, port["tenant_id"],

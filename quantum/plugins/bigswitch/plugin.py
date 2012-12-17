@@ -90,13 +90,18 @@ cfg.CONF.register_opts(restproxy_opts, "RESTPROXY")
 # The following are used to invoke the API on the external controller
 NET_RESOURCE_PATH = "/tenants/%s/networks"
 PORT_RESOURCE_PATH = "/tenants/%s/networks/%s/ports"
+ROUTER_RESOURCE_PATH = "/tenants/%s/routers"
+ROUTER_INTF_OP_PATH = "/tenants/%s/routers/%s/interface"
 NETWORKS_PATH = "/tenants/%s/networks/%s"
 PORTS_PATH = "/tenants/%s/networks/%s/ports/%s"
 ATTACHMENT_PATH = "/tenants/%s/networks/%s/ports/%s/attachment"
+ROUTERS_PATH = "/tenants/%s/routers/%s"
+ROUTER_INTF_PATH = "/tenants/%s/routers/%s/interface/%s"
 SUCCESS_CODES = range(200, 207)
 FAILURE_CODES = [0, 301, 302, 303, 400, 401, 403, 404, 500, 501, 502, 503,
                  504, 505]
 SYNTAX_ERROR_MESSAGE = 'Syntax error in server config file, aborting plugin'
+BASE_URI = '/quantum/v1.1'
 
 
 class RemoteRestError(exceptions.QuantumException):
@@ -275,7 +280,7 @@ class QuantumRestProxyV2(db_base_plugin_v2.QuantumDbPluginV2,
 
         # init network ctrl connections
         self.servers = ServerPool(servers, serverssl, serverauth,
-                                  timeout)
+                                  timeout, BASE_URI)
 
         # init dhcp support
         self.topic = topics.PLUGIN
@@ -687,6 +692,94 @@ class QuantumRestProxyV2(db_base_plugin_v2.QuantumDbPluginV2,
         except RemoteRestError as e:
             LOG.error(
                 "QuantumRestProxyV2: Unable to update remote port: %s" %
+                e.message)
+
+    def create_router(self, context, router):
+        LOG.debug("QuantumRestProxyV2: create_router() called")
+
+        # Validate args
+        tenant_id = self._get_tenant_id_for_create(context, router["router"])
+
+        # create router in DB
+        new_router = super(QuantumRestProxyV2, self).create_router(context,
+                                                                   router)
+
+        # create router on the network controller
+        try:
+            resource = ROUTER_RESOURCE_PATH % tenant_id
+            data = {
+                "router": {
+                    "id": new_router["id"],
+                    "name": new_router["name"],
+                }
+            }
+            ret = self.servers.post(resource, data)
+            if not self.servers.action_success(ret):
+                raise RemoteRestError(ret[2])
+        except RemoteRestError as e:
+            LOG.error("QuantumRestProxyV2:Unable to create remote router:%s" %
+                      e.message)
+            super(QuantumRestProxyV2, self).delete_router(context,
+                                                          new_router['id'])
+            raise
+
+        # return created router
+        return new_router
+
+    def update_router(self, context, router_id, router):
+
+        LOG.debug("QuantumRestProxyV2.update_router() called")
+
+        orig_router = super(QuantumRestProxyV2, self).get_router(context,
+                                                                 router_id)
+        tenant_id = orig_router["tenant_id"]
+        new_router = super(QuantumRestProxyV2, self).update_router(context,
+                                                                   router_id,
+                                                                   router)
+
+        # update router on network controller
+        if new_router["name"] != orig_router["name"]:
+            try:
+                resource = ROUTERS_PATH % (tenant_id, router_id)
+                data = {
+                    "router": new_router,
+                }
+                ret = self.servers.put(resource, data)
+                if not self.servers.action_success(ret):
+                    raise RemoteRestError(ret[2])
+            except RemoteRestError as e:
+                LOG.error(
+                    "QuantumRestProxyV2: Unable to update remote router: %s" %
+                    e.message)
+                # reset router to original state
+                super(QuantumRestProxyV2, self).update_router(context,
+                                                              router_id,
+                                                              orig_router)
+                raise
+
+        # return updated router
+        return new_router
+
+    def delete_router(self, context, router_id):
+        LOG.debug("QuantumRestProxyV2: delete_router() called")
+
+        # Validate args
+        orig_router = super(QuantumRestProxyV2, self).get_router(context,
+                                                                 router_id)
+        tenant_id = orig_router["tenant_id"]
+
+        # delete from network ctrl. Remote error on delete is ignored
+        try:
+            resource = ROUTERS_PATH % (tenant_id, router_id)
+            ret = self.servers.delete(resource)
+            if not self.servers.action_success(ret):
+                raise RemoteRestError(ret[2])
+            ret_val = super(QuantumRestProxyV2, self).delete_router(context,
+                                                                    router_id)
+            return ret_val
+        except RemoteRestError as e:
+            LOG.error(
+                "QuantumRestProxyV2: Unable to update remote router: %s" %
                 e.message)
 
     def _send_all_data(self):

@@ -452,6 +452,7 @@ class QuantumRestProxyV2(db_base_plugin_v2.QuantumDbPluginV2,
             LOG.error(
                 "QuantumRestProxyV2: Unable to update remote network: %s" %
                 e.message)
+            raise
 
     def create_port(self, context, port):
         """Create a port, which is a connection point of a device
@@ -623,6 +624,7 @@ class QuantumRestProxyV2(db_base_plugin_v2.QuantumDbPluginV2,
             LOG.error(
                 "QuantumRestProxyV2: Unable to update remote port: %s" %
                 e.message)
+            raise
 
     def _plug_interface(self, context, tenant_id, net_id, port_id,
                         remote_interface_id):
@@ -695,6 +697,7 @@ class QuantumRestProxyV2(db_base_plugin_v2.QuantumDbPluginV2,
                 e.message)
 
     def create_router(self, context, router):
+
         LOG.debug("QuantumRestProxyV2: create_router() called")
 
         # Validate args
@@ -779,8 +782,92 @@ class QuantumRestProxyV2(db_base_plugin_v2.QuantumDbPluginV2,
             return ret_val
         except RemoteRestError as e:
             LOG.error(
-                "QuantumRestProxyV2: Unable to update remote router: %s" %
+                "QuantumRestProxyV2: Unable to delete remote router: %s" %
                 e.message)
+            raise
+
+    def add_router_interface(self, context, router_id, interface_info):
+
+        LOG.debug("QuantumRestProxyV2: add_router_interface() called")
+
+        # Validate args
+        router = self._get_router(context, router_id)
+        tenant_id = router['tenant_id']
+
+        # create interface in DB
+        new_interface_info = super(QuantumRestProxyV2,
+                                   self).add_router_interface(context,
+                                                              router_id,
+                                                              interface_info)
+        port = self._get_port(context, new_interface_info['port_id'])
+        # we will use the port's network id as interface's id
+        interface_id = port['network_id']
+
+        # create interface on the network controller
+        try:
+            resource = ROUTER_INTF_OP_PATH % (tenant_id, router_id)
+            data = {
+                "interface": {
+                    'id': interface_id,
+                    "subnet": {
+                        'id': new_interface_info['subnet_id']
+                    }
+                }
+            }
+            ret = self.servers.put(resource, data)
+            if not self.servers.action_success(ret):
+                raise RemoteRestError(ret[2])
+        except RemoteRestError as e:
+            LOG.error("QuantumRestProxyV2:Unable to create interface :%s" %
+                      e.message)
+            super(QuantumRestProxyV2,
+                  self).remove_router_interface(context, router_id,
+                                                interface_info)
+            raise
+
+        return new_interface_info
+
+    def remove_router_interface(self, context, router_id, interface_info):
+
+        LOG.debug("QuantumRestProxyV2: remove_router_interface() called")
+
+        # Validate args
+        router = self._get_router(context, router_id)
+        tenant_id = router['tenant_id']
+
+        # we will first get the interface identifier before deleting in the DB
+        if not interface_info:
+            msg = "Either subnet_id or port_id must be specified"
+            raise q_exc.BadRequest(resource='router', msg=msg)
+        if 'port_id' in interface_info:
+            port = self._get_port(context, interface_info['port_id'])
+            interface_id = port['network_id']
+        elif 'subnet_id' in interface_info:
+            subnet = self._get_subnet(context, interface_info['subnet_id'])
+            interface_id = subnet['network_id']
+        else:
+            msg = "Either subnet_id or port_id must be specified"
+            raise q_exc.BadRequest(resource='router', msg=msg)
+
+        # remove router in DB
+        del_intf_info = super(QuantumRestProxyV2,
+                              self).remove_router_interface(context,
+                                                            router_id,
+                                                            interface_info)
+
+        # create router on the network controller
+        try:
+            resource = ROUTER_INTF_PATH % (tenant_id, router_id, interface_id)
+            ret = self.servers.delete(resource)
+            if not self.servers.action_success(ret):
+                raise RemoteRestError(ret[2])
+        except RemoteRestError as e:
+            LOG.error("QuantumRestProxyV2:Unable to delete remote intf :%s" %
+                      e.message)
+            raise
+
+        # return new interface
+        return del_intf_info
 
     def _send_all_data(self):
         """Pushes all data to network ctrl (networks/ports, ports/attachments)

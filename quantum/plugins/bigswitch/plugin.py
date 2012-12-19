@@ -800,8 +800,14 @@ class QuantumRestProxyV2(db_base_plugin_v2.QuantumDbPluginV2,
                                                               router_id,
                                                               interface_info)
         port = self._get_port(context, new_interface_info['port_id'])
+        net_id = port['network_id']
+        subnet_id = new_interface_info['subnet_id']
         # we will use the port's network id as interface's id
-        interface_id = port['network_id']
+        interface_id = net_id
+        network = super(QuantumRestProxyV2, self).get_network(context,
+                                                              net_id)
+        subnet = super(QuantumRestProxyV2, self).get_subnet(context,
+                                                            subnet_id)
 
         # create interface on the network controller
         try:
@@ -809,8 +815,20 @@ class QuantumRestProxyV2(db_base_plugin_v2.QuantumDbPluginV2,
             data = {
                 "interface": {
                     'id': interface_id,
+                    "network": {
+                        'id': network['id'],
+                        'name': network['name'],
+                        'gateway': subnet['gateway_ip'],
+                        'state': "UP"
+                    },
                     "subnet": {
-                        'id': new_interface_info['subnet_id']
+                        'id': subnet['id'],
+                        'name': subnet['name'],
+                        'cidr': subnet['cidr'],
+                        'gateway': subnet['gateway_ip'],
+                        'ip_version': subnet['ip_version'],
+                        'enable_dhcp': subnet['enable_dhcp'],
+                        'state': "UP"
                     }
                 }
             }

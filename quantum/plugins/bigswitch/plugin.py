@@ -45,6 +45,7 @@ on port-attach) on an additional PUT to do a bulk dump of all persistent data.
 """
 
 import base64
+import copy
 import httplib
 import json
 import socket
@@ -401,23 +402,13 @@ class QuantumRestProxyV2(db_base_plugin_v2.QuantumDbPluginV2,
             self._extend_network_dict_l3(context, new_net)
 
         # update network on network controller
-        if new_net["name"] != orig_net["name"]:
-            try:
-                resource = NETWORKS_PATH % (tenant_id, net_id)
-                data = {
-                    "network": new_net,
-                }
-                ret = self.servers.put(resource, data)
-                if not self.servers.action_success(ret):
-                    raise RemoteRestError(ret[2])
-            except RemoteRestError as e:
-                LOG.error(
-                    "QuantumRestProxyV2: Unable to update remote network: %s" %
-                    e.message)
-                # reset network to original state
-                super(QuantumRestProxyV2, self).update_network(
-                    context, id, orig_net)
-                raise
+        try:
+            self._send_update_network(new_net)
+        except RemoteRestError as e:
+            # reset network to original state
+            super(QuantumRestProxyV2, self).update_network(context, id,
+                                                           orig_net)
+            raise
 
         # return updated network
         return new_net
@@ -696,11 +687,68 @@ class QuantumRestProxyV2(db_base_plugin_v2.QuantumDbPluginV2,
                 "QuantumRestProxyV2: Unable to update remote port: %s" %
                 e.message)
 
-    def create_router(self, context, router):
+    def create_subnet(self, context, subnet):
+        LOG.debug("QuantumRestProxyV2: create_subnet() called")
+        # create subnet in DB
+        new_subnet = super(QuantumRestProxyV2, self).create_subnet(context,
+                                                                   subnet)
+        net_id = new_subnet['network_id']
+        orig_net = super(QuantumRestProxyV2, self).get_network(context,
+                                                               net_id)
+        # update network on network controller
+        try:
+            self._send_update_network(orig_net)
+        except RemoteRestError as e:
+            # rollback creation of subnet
+            super(QuantumRestProxyV2, self).delete_subnet(context,
+                                                          subnet['id'])
+            raise
+        return new_subnet
 
+    def update_subnet(self, context, id, subnet):
+        LOG.debug("QuantumRestProxyV2: update_subnet() called")
+        orig_subnet = super(QuantumRestProxyV2, self).get_subnet(context, id)
+        # update subnet in DB
+        new_subnet = super(QuantumRestProxyV2, self).update_subnet(context, id,
+                                                                   subnet)
+        net_id = new_subnet['network_id']
+        orig_net = super(QuantumRestProxyV2, self).get_network(context,
+                                                               net_id)
+        # update network on network controller
+        try:
+            self._send_update_network(orig_net)
+        except RemoteRestError as e:
+            # rollback creation of subnet
+            super(QuantumRestProxyV2, self).update_subnet(context, id,
+                                                          orig_subnet)
+            raise
+        return new_subnet
+
+    def delete_subnet(self, context, id):
+        LOG.debug("QuantumRestProxyV2: delete_subnet() called")
+        orig_subnet = super(QuantumRestProxyV2, self).get_subnet(context, id)
+        net_id = orig_subnet['network_id']
+        # delete subnet in DB
+        super(QuantumRestProxyV2, self).delete_subnet(context, id)
+        orig_net = super(QuantumRestProxyV2, self).get_network(context,
+                                                               net_id)
+        # update network on network controller
+        try:
+            self._send_update_network(orig_net)
+        except RemoteRestError as e:
+            # rollback creation of subnet
+            super(QuantumRestProxyV2, self).update_subnet(context, id,
+                                                          orig_subnet)
+            raise
+
+    def create_router(self, context, router):
         LOG.debug("QuantumRestProxyV2: create_router() called")
 
         # Validate args
+        if router["router"]["admin_state_up"] is False:
+            LOG.warning("Router with admin_state_up=False is not yet "
+                        "supported by this plugin. Ignoring setting.")
+
         tenant_id = self._get_tenant_id_for_create(context, router["router"])
 
         # create router in DB
@@ -714,6 +762,7 @@ class QuantumRestProxyV2(db_base_plugin_v2.QuantumDbPluginV2,
                 "router": {
                     "id": new_router["id"],
                     "name": new_router["name"],
+                    "state": "UP"
                 }
             }
             ret = self.servers.post(resource, data)
@@ -733,6 +782,11 @@ class QuantumRestProxyV2(db_base_plugin_v2.QuantumDbPluginV2,
 
         LOG.debug("QuantumRestProxyV2.update_router() called")
 
+        # Validate args
+        if router["router"]["admin_state_up"] is False:
+            LOG.warning("Router with admin_state_up=False is not yet "
+                        "supported by this plugin. Ignoring setting.")
+
         orig_router = super(QuantumRestProxyV2, self).get_router(context,
                                                                  router_id)
         tenant_id = orig_router["tenant_id"]
@@ -745,7 +799,11 @@ class QuantumRestProxyV2(db_base_plugin_v2.QuantumDbPluginV2,
             try:
                 resource = ROUTERS_PATH % (tenant_id, router_id)
                 data = {
-                    "router": new_router,
+                    "router": {
+                        "id": new_router['id'],
+                        "name": new_router['name'],
+                        "state": "UP"
+                    }
                 }
                 ret = self.servers.put(resource, data)
                 if not self.servers.action_success(ret):
@@ -942,6 +1000,59 @@ class QuantumRestProxyV2(db_base_plugin_v2.QuantumDbPluginV2,
             return ret
         except RemoteRestError as e:
             LOG.error(
-                'QuantumRestProxy: Unable to update remote network: %s' %
+                'QuantumRestProxy: Unable to update remote topology: %s' %
+                e.message)
+            raise
+
+    def _get_all_subnets_json_for_network(self, net_id):
+        admin_context = qcontext.get_admin_context()
+        subnets = self._get_subnets_by_network(admin_context,
+                                               net_id)
+        subnets_details = []
+        if subnets:
+            for subnet in subnets:
+                subnet_details = {
+                    'id': subnet['id'],
+                    'name': subnet['name'],
+                    'cidr': subnet['cidr'],
+                    'gateway_ip': subnet['gateway_ip'],
+                    'ip_version': subnet['ip_version'],
+                    'enable_dhcp': subnet['enable_dhcp'],
+                    'state': "UP"
+                }
+                subnet['state'] = 'UP'
+                subnets_details.append(subnet_details)
+
+        return subnets_details
+
+    def _send_update_network(self, network):
+        net_id = network['id']
+        tenant_id = network['tenant_id']
+        # update network on network controller
+        try:
+            resource = NETWORKS_PATH % (tenant_id, net_id)
+            subnets = self._get_all_subnets_json_for_network(net_id)
+            network['subnets'] = subnets
+            if subnets:
+                for subnet in subnets:
+                    gateway_ip = subnet['gateway_ip']
+                    if gateway_ip:
+                        # FIX: For backward compatibility with wire protocol
+                        network['gateway'] = gateway_ip
+                        break
+            if network['admin_state_up']:
+                network['state'] = 'UP'
+            else:
+                network['state'] = 'DOWN'
+            del network['admin_state_up']
+            data = {
+                "network": network,
+            }
+            ret = self.servers.put(resource, data)
+            if not self.servers.action_success(ret):
+                raise RemoteRestError(ret[2])
+        except RemoteRestError as e:
+            LOG.error(
+                "QuantumRestProxyV2: Unable to update remote network: %s" %
                 e.message)
             raise

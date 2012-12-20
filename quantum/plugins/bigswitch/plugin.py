@@ -866,7 +866,7 @@ class QuantumRestProxyV2(db_base_plugin_v2.QuantumDbPluginV2,
                     "subnet": mapped_subnet
                 }
             }
-            ret = self.servers.put(resource, data)
+            ret = self.servers.post(resource, data)
             if not self.servers.action_success(ret):
                 raise RemoteRestError(ret[2])
         except RemoteRestError as e:

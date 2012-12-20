@@ -246,3 +246,28 @@ class RouterDBTestCase(test_l3_plugin.L3NatDBTestCase):
 
     def test_create_external_network_admin_suceeds(self):
         self.skipTest("Plugin does not support external networks")
+
+    def test_send_data(self):
+        plugin_obj = QuantumManager.get_plugin()
+        with self.router() as r:
+            with self.subnet() as s:
+                body = self._router_interface_action('add',
+                                                     r['router']['id'],
+                                                     s['subnet']['id'],
+                                                     None)
+                self.assertTrue('port_id' in body)
+
+                # fetch port and confirm device_id
+                r_port_id = body['port_id']
+                body = self._show('ports', r_port_id)
+                self.assertEquals(body['port']['device_id'], r['router']['id'])
+
+                result = plugin_obj._send_all_data()
+                self.assertEquals(result[0], 200)
+
+                body = self._router_interface_action('remove',
+                                                     r['router']['id'],
+                                                     s['subnet']['id'],
+                                                     None)
+                body = self._show('ports', r_port_id,
+                                  expected_code=exc.HTTPNotFound.code)

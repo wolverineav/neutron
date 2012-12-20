@@ -849,23 +849,15 @@ class QuantumRestProxyV2(db_base_plugin_v2.QuantumDbPluginV2,
         subnet_id = new_interface_info['subnet_id']
         # we will use the port's network id as interface's id
         interface_id = net_id
-        network = super(QuantumRestProxyV2, self).get_network(context,
-                                                              net_id)
-        subnet = super(QuantumRestProxyV2, self).get_subnet(context,
-                                                            subnet_id)
-        mapped_network = self._get_mapped_network_with_subnets(network)
-        mapped_subnet = self._map_state_and_status(subnet)
+        intf_details = self._get_router_intf_details(context,
+                                                     router_id,
+                                                     interface_id,
+                                                     subnet_id)
 
         # create interface on the network controller
         try:
             resource = ROUTER_INTF_OP_PATH % (tenant_id, router_id)
-            data = {
-                "interface": {
-                    'id': interface_id,
-                    "network": mapped_network,
-                    "subnet": mapped_subnet
-                }
-            }
+            data = {"interface": intf_details}
             ret = self.servers.post(resource, data)
             if not self.servers.action_success(ret):
                 raise RemoteRestError(ret[2])
@@ -929,23 +921,13 @@ class QuantumRestProxyV2(db_base_plugin_v2.QuantumDbPluginV2,
         admin_context = qcontext.get_admin_context()
         networks = {}
         ports = {}
+        routers = {}
 
         all_networks = super(QuantumRestProxyV2,
                              self).get_networks(admin_context) or []
         for net in all_networks:
-            networks[net.get('id')] = {
-                'id': net.get('id'),
-                'name': net.get('name'),
-                'op-status': net.get('admin_state_up'),
-            }
-
-            subnets = net.get('subnets', [])
-            for subnet_id in subnets:
-                subnet = self.get_subnet(admin_context, subnet_id)
-                gateway_ip = subnet.get('gateway_ip')
-                if gateway_ip:
-                    # FIX: For backward compatibility with wire protocol
-                    networks[net.get('id')]['gateway'] = gateway_ip
+            mapped_network = self._get_mapped_network_with_subnets(net)
+            networks[net.get('id')] = mapped_network
 
             ports = []
             net_filter = {'network_id': [net.get('id')]}
@@ -953,22 +935,42 @@ class QuantumRestProxyV2(db_base_plugin_v2.QuantumDbPluginV2,
                               self).get_ports(admin_context,
                                               filters=net_filter) or []
             for port in net_ports:
-                port_details = {
-                    'id': port.get('id'),
-                    'attachment': {
-                        'id': port.get('id') + '00',
-                        'mac': port.get('mac_address'),
-                    },
-                    'state': port.get('status'),
-                    'op-status': port.get('admin_state_up'),
-                    'mac': None
+                mapped_port = self._map_state_and_status(port)
+                mapped_port['attachment'] = {
+                    'id': port.get('id') + '00',
+                    'mac': port.get('mac_address'),
                 }
-                ports.append(port_details)
+                ports.append(mapped_port)
             networks[net.get('id')]['ports'] = ports
+
+        all_routers = super(QuantumRestProxyV2,
+                            self).get_routers(admin_context) or []
+        for router in all_routers:
+            interfaces = []
+            mapped_router = self._map_state_and_status(router)
+            routers[router.get('id')] = mapped_router
+            router_filter = {
+                'device_owner': ["network:router_interface"],
+                'device_id': [router.get('id')]
+            }
+            router_ports = super(QuantumRestProxyV2,
+                                 self).get_ports(admin_context,
+                                                 filters=router_filter) or []
+            #LOG.error("Sumit: ports %s" % router_ports)
+            for port in router_ports:
+                net_id = port.get('network_id')
+                subnet_id = port['fixed_ips'][0]['subnet_id']
+                intf_details = self._get_router_intf_details(admin_context,
+                                                             router.get('id'),
+                                                             net_id,
+                                                             subnet_id)
+                interfaces.append(intf_details)
+            routers[router.get('id')]['interfaces'] = interfaces
         try:
             resource = '/topology'
             data = {
                 'networks': networks,
+                'routers': routers,
             }
             ret = self.servers.put(resource, data)
             if not self.servers.action_success(ret):
@@ -1055,3 +1057,23 @@ class QuantumRestProxyV2(db_base_plugin_v2.QuantumDbPluginV2,
                 LOG.warning("Operational status is internally set by the"
                             " plugin. Ignoring setting status=%s." %
                             resource['status'])
+
+    def _get_router_intf_details(self, context, router_id, intf_id, subnet_id):
+
+        router = self._get_router(context, router_id)
+        # we will use the network id as interface's id
+        net_id = intf_id
+        network = super(QuantumRestProxyV2, self).get_network(context,
+                                                              net_id)
+        subnet = super(QuantumRestProxyV2, self).get_subnet(context,
+                                                            subnet_id)
+        mapped_network = self._get_mapped_network_with_subnets(network)
+        mapped_subnet = self._map_state_and_status(subnet)
+
+        data = {
+            'id': intf_id,
+            "network": mapped_network,
+            "subnet": mapped_subnet
+        }
+
+        return data

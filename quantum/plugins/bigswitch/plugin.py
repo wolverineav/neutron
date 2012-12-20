@@ -50,6 +50,7 @@ import httplib
 import json
 import socket
 
+from quantum.common import constants as const
 from quantum.common import exceptions
 from quantum.common import rpc as q_rpc
 from quantum.common import topics
@@ -92,12 +93,12 @@ cfg.CONF.register_opts(restproxy_opts, "RESTPROXY")
 NET_RESOURCE_PATH = "/tenants/%s/networks"
 PORT_RESOURCE_PATH = "/tenants/%s/networks/%s/ports"
 ROUTER_RESOURCE_PATH = "/tenants/%s/routers"
-ROUTER_INTF_OP_PATH = "/tenants/%s/routers/%s/interface"
+ROUTER_INTF_OP_PATH = "/tenants/%s/routers/%s/interfaces"
 NETWORKS_PATH = "/tenants/%s/networks/%s"
 PORTS_PATH = "/tenants/%s/networks/%s/ports/%s"
 ATTACHMENT_PATH = "/tenants/%s/networks/%s/ports/%s/attachment"
 ROUTERS_PATH = "/tenants/%s/routers/%s"
-ROUTER_INTF_PATH = "/tenants/%s/routers/%s/interface/%s"
+ROUTER_INTF_PATH = "/tenants/%s/routers/%s/interfaces/%s"
 SUCCESS_CODES = range(200, 207)
 FAILURE_CODES = [0, 301, 302, 303, 400, 401, 403, 404, 500, 501, 502, 503,
                  504, 505]
@@ -321,13 +322,10 @@ class QuantumRestProxyV2(db_base_plugin_v2.QuantumDbPluginV2,
 
         LOG.debug("QuantumRestProxyV2: create_network() called")
 
+        self._warn_on_state_status(network['network'])
+
         # Validate args
         tenant_id = self._get_tenant_id_for_create(context, network["network"])
-        net_name = network["network"]["name"]
-        if network["network"]["admin_state_up"] is False:
-            LOG.warning("Network with admin_state_up=False are not yet "
-                        "supported by this plugin. Ignoring setting for "
-                        "network %s", net_name)
 
         session = context.session
         with session.begin(subtransactions=True):
@@ -340,11 +338,9 @@ class QuantumRestProxyV2(db_base_plugin_v2.QuantumDbPluginV2,
         # create network on the network controller
         try:
             resource = NET_RESOURCE_PATH % tenant_id
+            mapped_network = self._get_mapped_network_with_subnets(new_net)
             data = {
-                "network": {
-                    "id": new_net["id"],
-                    "name": new_net["name"],
-                }
+                "network": mapped_network
             }
             ret = self.servers.post(resource, data)
             if not self.servers.action_success(ret):
@@ -384,20 +380,16 @@ class QuantumRestProxyV2(db_base_plugin_v2.QuantumDbPluginV2,
 
         LOG.debug("QuantumRestProxyV2.update_network() called")
 
-        # Validate Args
-        if network["network"].get("admin_state_up"):
-            if network["network"]["admin_state_up"] is False:
-                LOG.warning("Network with admin_state_up=False are not yet "
-                            "supported by this plugin. Ignoring setting for "
-                            "network %s", net_name)
+        self._warn_on_state_status(network['network'])
 
         session = context.session
         with session.begin(subtransactions=True):
             orig_net = super(QuantumRestProxyV2, self).get_network(context,
                                                                    net_id)
             tenant_id = orig_net["tenant_id"]
-            new_net = super(QuantumRestProxyV2, self).update_network(
-                context, net_id, network)
+            new_net = super(QuantumRestProxyV2, self).update_network(context,
+                                                                     net_id,
+                                                                     network)
             self._process_l3_update(context, network['network'], net_id)
             self._extend_network_dict_l3(context, new_net)
 
@@ -482,11 +474,9 @@ class QuantumRestProxyV2(db_base_plugin_v2.QuantumDbPluginV2,
         # create on networl ctrl
         try:
             resource = PORT_RESOURCE_PATH % (net["tenant_id"], net["id"])
+            mapped_port = self._map_state_and_status(new_port)
             data = {
-                "port": {
-                    "id": new_port["id"],
-                    "state": "ACTIVE",
-                }
+                "port": mapped_port
             }
             ret = self.servers.post(resource, data)
             if not self.servers.action_success(ret):
@@ -538,6 +528,8 @@ class QuantumRestProxyV2(db_base_plugin_v2.QuantumDbPluginV2,
         """
         LOG.debug("QuantumRestProxyV2: update_port() called")
 
+        self._warn_on_state_status(port['port'])
+
         # Validate Args
         orig_port = super(QuantumRestProxyV2, self).get_port(context, port_id)
 
@@ -549,7 +541,8 @@ class QuantumRestProxyV2(db_base_plugin_v2.QuantumDbPluginV2,
         try:
             resource = PORTS_PATH % (orig_port["tenant_id"],
                                      orig_port["network_id"], port_id)
-            data = {"port": new_port, }
+            mapped_port = self._map_state_and_status(new_port)
+            data = {"port": mapped_port}
             ret = self.servers.put(resource, data)
             if not self.servers.action_success(ret):
                 raise RemoteRestError(ret[2])
@@ -642,11 +635,11 @@ class QuantumRestProxyV2(db_base_plugin_v2.QuantumDbPluginV2,
                     gateway = subnet.get("gateway_ip")
                     if gateway is not None:
                         resource = NETWORKS_PATH % (tenant_id, net_id)
-                        data = {"network":
-                                {"id": net_id,
-                                 "gateway": gateway,
-                                 }
-                                }
+                        orig_net = super(QuantumRestProxyV2,
+                                         self).get_network(context, net_id)
+                        mapped_network = self._map_state_and_status(orig_net)
+                        mapped_network['gateway'] = gateway
+                        data = {"network": mapped_network}
                         ret = self.servers.put(resource, data)
                         if not self.servers.action_success(ret):
                             raise RemoteRestError(ret[2])
@@ -689,6 +682,9 @@ class QuantumRestProxyV2(db_base_plugin_v2.QuantumDbPluginV2,
 
     def create_subnet(self, context, subnet):
         LOG.debug("QuantumRestProxyV2: create_subnet() called")
+
+        self._warn_on_state_status(subnet['subnet'])
+
         # create subnet in DB
         new_subnet = super(QuantumRestProxyV2, self).create_subnet(context,
                                                                    subnet)
@@ -707,7 +703,11 @@ class QuantumRestProxyV2(db_base_plugin_v2.QuantumDbPluginV2,
 
     def update_subnet(self, context, id, subnet):
         LOG.debug("QuantumRestProxyV2: update_subnet() called")
+
+        self._warn_on_state_status(subnet['subnet'])
+
         orig_subnet = super(QuantumRestProxyV2, self).get_subnet(context, id)
+
         # update subnet in DB
         new_subnet = super(QuantumRestProxyV2, self).update_subnet(context, id,
                                                                    subnet)
@@ -718,7 +718,7 @@ class QuantumRestProxyV2(db_base_plugin_v2.QuantumDbPluginV2,
         try:
             self._send_update_network(orig_net)
         except RemoteRestError as e:
-            # rollback creation of subnet
+            # rollback updation of subnet
             super(QuantumRestProxyV2, self).update_subnet(context, id,
                                                           orig_subnet)
             raise
@@ -744,10 +744,7 @@ class QuantumRestProxyV2(db_base_plugin_v2.QuantumDbPluginV2,
     def create_router(self, context, router):
         LOG.debug("QuantumRestProxyV2: create_router() called")
 
-        # Validate args
-        if router["router"]["admin_state_up"] is False:
-            LOG.warning("Router with admin_state_up=False is not yet "
-                        "supported by this plugin. Ignoring setting.")
+        self._warn_on_state_status(router['router'])
 
         tenant_id = self._get_tenant_id_for_create(context, router["router"])
 
@@ -758,12 +755,9 @@ class QuantumRestProxyV2(db_base_plugin_v2.QuantumDbPluginV2,
         # create router on the network controller
         try:
             resource = ROUTER_RESOURCE_PATH % tenant_id
+            mapped_router = self._map_state_and_status(new_router)
             data = {
-                "router": {
-                    "id": new_router["id"],
-                    "name": new_router["name"],
-                    "state": "UP"
-                }
+                "router": mapped_router
             }
             ret = self.servers.post(resource, data)
             if not self.servers.action_success(ret):
@@ -782,10 +776,7 @@ class QuantumRestProxyV2(db_base_plugin_v2.QuantumDbPluginV2,
 
         LOG.debug("QuantumRestProxyV2.update_router() called")
 
-        # Validate args
-        if router["router"]["admin_state_up"] is False:
-            LOG.warning("Router with admin_state_up=False is not yet "
-                        "supported by this plugin. Ignoring setting.")
+        self._warn_on_state_status(router['router'])
 
         orig_router = super(QuantumRestProxyV2, self).get_router(context,
                                                                  router_id)
@@ -795,28 +786,24 @@ class QuantumRestProxyV2(db_base_plugin_v2.QuantumDbPluginV2,
                                                                    router)
 
         # update router on network controller
-        if new_router["name"] != orig_router["name"]:
-            try:
-                resource = ROUTERS_PATH % (tenant_id, router_id)
-                data = {
-                    "router": {
-                        "id": new_router['id'],
-                        "name": new_router['name'],
-                        "state": "UP"
-                    }
-                }
-                ret = self.servers.put(resource, data)
-                if not self.servers.action_success(ret):
-                    raise RemoteRestError(ret[2])
-            except RemoteRestError as e:
-                LOG.error(
-                    "QuantumRestProxyV2: Unable to update remote router: %s" %
-                    e.message)
-                # reset router to original state
-                super(QuantumRestProxyV2, self).update_router(context,
-                                                              router_id,
-                                                              orig_router)
-                raise
+        try:
+            resource = ROUTERS_PATH % (tenant_id, router_id)
+            mapped_router = self._map_state_and_status(new_router)
+            data = {
+                "router": mapped_router
+            }
+            ret = self.servers.put(resource, data)
+            if not self.servers.action_success(ret):
+                raise RemoteRestError(ret[2])
+        except RemoteRestError as e:
+            LOG.error(
+                "QuantumRestProxyV2: Unable to update remote router: %s" %
+                e.message)
+            # reset router to original state
+            super(QuantumRestProxyV2, self).update_router(context,
+                                                          router_id,
+                                                          orig_router)
+            raise
 
         # return updated router
         return new_router
@@ -866,6 +853,8 @@ class QuantumRestProxyV2(db_base_plugin_v2.QuantumDbPluginV2,
                                                               net_id)
         subnet = super(QuantumRestProxyV2, self).get_subnet(context,
                                                             subnet_id)
+        mapped_network = self._get_mapped_network_with_subnets(network)
+        mapped_subnet = self._map_state_and_status(subnet)
 
         # create interface on the network controller
         try:
@@ -873,21 +862,8 @@ class QuantumRestProxyV2(db_base_plugin_v2.QuantumDbPluginV2,
             data = {
                 "interface": {
                     'id': interface_id,
-                    "network": {
-                        'id': network['id'],
-                        'name': network['name'],
-                        'gateway': subnet['gateway_ip'],
-                        'state': "UP"
-                    },
-                    "subnet": {
-                        'id': subnet['id'],
-                        'name': subnet['name'],
-                        'cidr': subnet['cidr'],
-                        'gateway': subnet['gateway_ip'],
-                        'ip_version': subnet['ip_version'],
-                        'enable_dhcp': subnet['enable_dhcp'],
-                        'state': "UP"
-                    }
+                    "network": mapped_network,
+                    "subnet": mapped_subnet
                 }
             }
             ret = self.servers.put(resource, data)
@@ -1011,19 +987,29 @@ class QuantumRestProxyV2(db_base_plugin_v2.QuantumDbPluginV2,
         subnets_details = []
         if subnets:
             for subnet in subnets:
-                subnet_details = {
-                    'id': subnet['id'],
-                    'name': subnet['name'],
-                    'cidr': subnet['cidr'],
-                    'gateway_ip': subnet['gateway_ip'],
-                    'ip_version': subnet['ip_version'],
-                    'enable_dhcp': subnet['enable_dhcp'],
-                    'state': "UP"
-                }
-                subnet['state'] = 'UP'
-                subnets_details.append(subnet_details)
+                subnet_dict = self._make_subnet_dict(subnet)
+                mapped_subnet = self._map_state_and_status(subnet_dict)
+                subnets_details.append(mapped_subnet)
 
         return subnets_details
+
+    def _get_mapped_network_with_subnets(self, network):
+        network = self._map_state_and_status(network)
+        subnets = self._get_all_subnets_json_for_network(network['id'])
+        network['subnets'] = subnets
+        gateway_ip = None
+
+        if subnets:
+            for subnet in subnets:
+                gateway_ip = subnet['gateway_ip']
+                if gateway_ip:
+                    # FIX: For backward compatibility with wire protocol
+                    network['gateway'] = gateway_ip
+                    break
+        if not gateway_ip:
+            network['gateway'] = ""
+
+        return network
 
     def _send_update_network(self, network):
         net_id = network['id']
@@ -1031,22 +1017,9 @@ class QuantumRestProxyV2(db_base_plugin_v2.QuantumDbPluginV2,
         # update network on network controller
         try:
             resource = NETWORKS_PATH % (tenant_id, net_id)
-            subnets = self._get_all_subnets_json_for_network(net_id)
-            network['subnets'] = subnets
-            if subnets:
-                for subnet in subnets:
-                    gateway_ip = subnet['gateway_ip']
-                    if gateway_ip:
-                        # FIX: For backward compatibility with wire protocol
-                        network['gateway'] = gateway_ip
-                        break
-            if network['admin_state_up']:
-                network['state'] = 'UP'
-            else:
-                network['state'] = 'DOWN'
-            del network['admin_state_up']
+            mapped_network = self._get_mapped_network_with_subnets(network)
             data = {
-                "network": network,
+                "network": mapped_network,
             }
             ret = self.servers.put(resource, data)
             if not self.servers.action_success(ret):
@@ -1056,3 +1029,29 @@ class QuantumRestProxyV2(db_base_plugin_v2.QuantumDbPluginV2,
                 "QuantumRestProxyV2: Unable to update remote network: %s" %
                 e.message)
             raise
+
+    def _map_state_and_status(self, resource):
+        resource = copy.copy(resource)
+        if 'admin_state_up' in resource:
+            if resource['admin_state_up']:
+                resource['state'] = 'UP'
+            else:
+                resource['state'] = 'DOWN'
+            del resource['admin_state_up']
+
+        if 'status' in resource:
+            del resource['status']
+
+        return resource
+
+    def _warn_on_state_status(self, resource):
+        if 'admin_state_up' in resource:
+            if resource['admin_state_up'] is False:
+                LOG.warning("Setting admin_state_up=False is not supported"
+                            " in this plugin version. Ignoring setting.")
+
+        if 'status' in resource:
+            if resource['status'] is not const.NET_STATUS_ACTIVE:
+                LOG.warning("Operational status is internally set by the"
+                            " plugin. Ignoring setting status=%s." %
+                            resource['status'])

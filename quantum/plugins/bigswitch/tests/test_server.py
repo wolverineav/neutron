@@ -30,13 +30,13 @@ class TestNetworkCtrl(object):
     def __init__(self, host='', port=8000,
                  default_status='404 Not Found',
                  default_response='404 Not Found',
-                 debug=False):
+                 debug=False, debug_env=False):
         self.host = host
         self.port = port
         self.default_status = default_status
         self.default_response = default_response
         self.debug = debug
-        self.debug_env = False
+        self.debug_env = debug_env
         self.debug_resp = False
         self.matches = []
 
@@ -46,7 +46,7 @@ class TestNetworkCtrl(object):
         matched in the order of priority. For same priority, match the
         oldest match request first.
 
-        :param prior: intgere priority of this match (e.g. 100)
+        :param prior: integer priority of this match (e.g. 100)
         :param method_regexp: regexp to match method (e.g. 'PUT|POST')
         :param uri_regexp: regexp to match uri (e.g. '/quantum/v?.?/')
         :param handler: function with signature:
@@ -177,10 +177,15 @@ if __name__ == "__main__":
         if sys.argv[2].lower() in ['debug', 'true']:
             debug = True
 
+    debug_env = False
+    if len(sys.argv) > 3:
+        if sys.argv[3].lower() in ['debug_env', 'true']:
+            debug_env = True
+
     ctrl = TestNetworkCtrl(port=port,
                            default_status='200 OK',
                            default_response='{"status":"200 OK"}',
-                           debug=debug)
+                           debug=debug, debug_env=debug_env)
     ctrl.match(100, 'GET', '/test',
                lambda m, u, b, **k: ('200 OK', '["200 OK"]'))
     ctrl.run()

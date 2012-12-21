@@ -82,6 +82,7 @@ restproxy_opts = [
     cfg.BoolOpt('serverssl', default=False),
     cfg.BoolOpt('syncdata', default=False),
     cfg.IntOpt('servertimeout', default=10),
+    cfg.StrOpt('quantumid', default='Quantum'),
 ]
 
 
@@ -118,7 +119,8 @@ class RemoteRestError(exceptions.QuantumException):
 class ServerProxy(object):
     """REST server proxy to a network controller."""
 
-    def __init__(self, server, port, ssl, auth, timeout, base_uri, name):
+    def __init__(self, server, port, ssl, auth, quantumid, timeout,
+                 base_uri, name):
         self.server = server
         self.port = port
         self.ssl = ssl
@@ -127,6 +129,7 @@ class ServerProxy(object):
         self.name = name
         self.success_codes = SUCCESS_CODES
         self.auth = None
+        self.quantum_id = quantumid
         if auth:
             self.auth = 'Basic ' + base64.encodestring(auth).strip()
 
@@ -138,6 +141,7 @@ class ServerProxy(object):
         headers['Content-type'] = 'application/json'
         headers['Accept'] = 'application/json'
         headers['QuantumProxy-Agent'] = self.name
+        headers['Quantum-ID'] = self.quantum_id
         if self.auth:
             headers['Authorization'] = self.auth
 
@@ -181,20 +185,21 @@ class ServerProxy(object):
 
 
 class ServerPool(object):
-    def __init__(self, servers, ssl, auth, timeout=10,
+    def __init__(self, servers, ssl, auth, quantumid, timeout=10,
                  base_uri='/quantum/v1.0', name='QuantumRestProxy'):
         self.base_uri = base_uri
         self.timeout = timeout
         self.name = name
         self.auth = auth
+        self.quantum_id = quantumid
         self.ssl = ssl
         self.servers = []
         for server_port in servers:
             self.servers.append(self.server_proxy_for(*server_port))
 
     def server_proxy_for(self, server, port):
-        return ServerProxy(server, port, self.ssl, self.auth, self.timeout,
-                           self.base_uri, self.name)
+        return ServerProxy(server, port, self.ssl, self.auth, self.quantum_id,
+                           self.timeout, self.base_uri, self.name)
 
     def server_failure(self, resp):
         """Define failure codes as required.
@@ -273,6 +278,7 @@ class QuantumRestProxyV2(db_base_plugin_v2.QuantumDbPluginV2,
         serverssl = cfg.CONF.RESTPROXY.serverssl
         syncdata = cfg.CONF.RESTPROXY.syncdata
         timeout = cfg.CONF.RESTPROXY.servertimeout
+        quantumid = cfg.CONF.RESTPROXY.quantumid
 
         # validate config
         assert servers is not None, 'Servers not defined. Aborting plugin'
@@ -281,7 +287,7 @@ class QuantumRestProxyV2(db_base_plugin_v2.QuantumDbPluginV2,
         assert all(len(s) == 2 for s in servers), SYNTAX_ERROR_MESSAGE
 
         # init network ctrl connections
-        self.servers = ServerPool(servers, serverssl, serverauth,
+        self.servers = ServerPool(servers, serverssl, serverauth, quantumid,
                                   timeout, BASE_URI)
 
         # init dhcp support

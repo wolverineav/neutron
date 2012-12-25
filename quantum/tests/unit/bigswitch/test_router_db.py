@@ -21,6 +21,9 @@
 import logging
 import os
 
+import ast
+import json
+from jsonschema import Validator
 from mock import patch
 from webob import exc
 
@@ -57,9 +60,16 @@ class HTTPResponseMock():
 class HTTPConnectionMock():
 
     def __init__(self, server, port, timeout):
+        self._validator = Validator()
         pass
 
     def request(self, action, uri, body, headers):
+        if uri is not '/quantum/v1.1/topology':
+            return
+        schema = {"type":"object","$schema": "http://json-schema.org/draft-03/schema","id": "#","required":true,"properties":{ "networks": { "type":"array", "id": "networks", "required":true, "items": { "type":"object", "id": "0", "required":false, "properties":{ "gateway": { "type":"string", "id": "gateway", "required":true }, "id": { "type":"string", "id": "id", "required":true }, "name": { "type":"string", "id": "name", "required":true }, "ports": { "type":"array", "id": "ports", "required":false, "items": { "type":"object", "id": "0", "required":false, "properties":{ "attachment": { "type":"object", "id": "attachment", "required":false, "properties":{ "id": { "type":"string", "id": "id", "required":true }, "mac": { "type":"string", "id": "mac", "required":true } } }, "device_id": { "type":"string", "id": "device_id", "required":false }, "device_owner": { "type":"string", "id": "device_owner", "required":false }, "fixed_ips": { "type":"array", "id": "fixed_ips", "required":true, "items": { "type":"object", "id": "0", "required":false, "properties":{ "ip_address": { "type":"string", "id": "ip_address", "required":false }, "subnet_id": { "type":"string", "id": "subnet_id", "required":false } } } }, "id": { "type":"string", "id": "id", "required":true }, "mac_address": { "type":"string", "id": "mac_address", "required":false }, "name": { "type":"string", "id": "name", "required":false }, "network_id": { "type":"string", "id": "network_id", "required":true }, "state": { "type":"string", "id": "state", "required":false }, "tenant_id": { "type":"string", "id": "tenant_id", "required":true } } } }, "shared": { "type":"boolean", "id": "shared", "required":false }, "state": { "type":"string", "id": "state", "required":false }, "subnets": { "type":"array", "id": "subnets", "required":false, "items": { "type":"object", "id": "0", "required":false, "properties":{ "allocation_pools": { "type":"array", "id": "allocation_pools", "required":false, "items": { "type":"object", "id": "0", "required":false, "properties":{ "end": { "type":"string", "id": "end", "required":false }, "start": { "type":"string", "id": "start", "required":false } } } }, "cidr": { "type":"string", "id": "cidr", "required":true }, "dns_nameservers": { "type":"array", "id": "dns_nameservers", "required":false }, "enable_dhcp": { "type":"boolean", "id": "enable_dhcp", "required":false }, "gateway_ip": { "type":"string", "id": "gateway_ip", "required":false }, "host_routes": { "type":"array", "id": "host_routes", "required":false }, "id": { "type":"string", "id": "id", "required":true }, "ip_version": { "type":"number", "id": "ip_version", "required":false }, "name": { "type":"string", "id": "name", "required":false }, "network_id": { "type":"string", "id": "network_id", "required":true }, "shared": { "type":"boolean", "id": "shared", "required":false }, "tenant_id": { "type":"string", "id": "tenant_id", "required":true } } } }, "tenant_id": { "type":"string", "id": "tenant_id", "required":true } } } }, "routers": { "type":"array", "id": "routers", "required":true, "items": { "type":"object", "id": "0", "required":false, "properties":{ "external_gateway_info": { "type":"null", "id": "external_gateway_info", "required":false }, "id": { "type":"string", "id": "id", "required":true }, "interfaces": { "type":"array", "id": "interfaces", "required":true, "items": { "type":"object", "id": "0", "required":false, "properties":{ "id": { "type":"string", "id": "id", "required":true }, "network": { "type":"object", "id": "network", "required":true, "properties":{ "gateway": { "type":"string", "id": "gateway", "required":false }, "id": { "type":"string", "id": "id", "required":true }, "name": { "type":"string", "id": "name", "required":false }, "shared": { "type":"boolean", "id": "shared", "required":false }, "state": { "type":"string", "id": "state", "required":false }, "subnets": { "type":"array", "id": "subnets", "required":true, "items": { "type":"object", "id": "0", "required":false, "properties":{ "allocation_pools": { "type":"array", "id": "allocation_pools", "required":false, "items": { "type":"object", "id": "0", "required":false, "properties":{ "end": { "type":"string", "id": "end", "required":false }, "start": { "type":"string", "id": "start", "required":false } } } }, "cidr": { "type":"string", "id": "cidr", "required":true }, "dns_nameservers": { "type":"array", "id": "dns_nameservers", "required":false }, "enable_dhcp": { "type":"boolean", "id": "enable_dhcp", "required":false }, "gateway_ip": { "type":"string", "id": "gateway_ip", "required":false }, "host_routes": { "type":"array", "id": "host_routes", "required":false }, "id": { "type":"string", "id": "id", "required":true }, "ip_version": { "type":"number", "id": "ip_version", "required":false }, "name": { "type":"string", "id": "name", "required":false }, "network_id": { "type":"string", "id": "network_id", "required":true }, "shared": { "type":"boolean", "id": "shared", "required":false }, "tenant_id": { "type":"string", "id": "tenant_id", "required":true } } } }, "tenant_id": { "type":"string", "id": "tenant_id", "required":true } } }, "subnet": { "type":"object", "id": "subnet", "required":true, "properties":{ "allocation_pools": { "type":"array", "id": "allocation_pools", "required":false, "items": { "type":"object", "id": "0", "required":false, "properties":{ "end": { "type":"string", "id": "end", "required":false }, "start": { "type":"string", "id": "start", "required":false } } } }, "cidr": { "type":"string", "id": "cidr", "required":true }, "dns_nameservers": { "type":"array", "id": "dns_nameservers", "required":false }, "enable_dhcp": { "type":"boolean", "id": "enable_dhcp", "required":false }, "gateway_ip": { "type":"string", "id": "gateway_ip", "required":false }, "host_routes": { "type":"array", "id": "host_routes", "required":false }, "id": { "type":"string", "id": "id", "required":true }, "ip_version": { "type":"number", "id": "ip_version", "required":false }, "name": { "type":"string", "id": "name", "required":false }, "network_id": { "type":"string", "id": "network_id", "required":true }, "shared": { "type":"boolean", "id": "shared", "required":false }, "tenant_id": { "type":"string", "id": "tenant_id", "required":true } } } } } }, "name": { "type":"string", "id": "name", "required":false }, "state": { "type":"string", "id": "state", "required":false }, "tenant_id": { "type":"string", "id": "tenant_id", "required":true } } } } }}
+
+        body_dict = json.loads(body)
+        self._validator.validate(body_dict, schema)
         return
 
     def getresponse(self):
@@ -266,3 +276,39 @@ class RouterDBTestCase(test_l3_plugin.L3NatDBTestCase):
 
     def test_create_external_network_admin_suceeds(self):
         self.skipTest("Plugin does not support external networks")
+
+    def test_send_data(self):
+        plugin_obj = QuantumManager.get_plugin()
+        with self.router() as r:
+            with self.subnet() as s:
+                with self.router() as r1:
+                    with self.subnet(cidr='10.0.10.0/24') as s1:
+                        body = self._router_interface_action('add',
+                                                         r1['router']['id'],
+                                                         s1['subnet']['id'],
+                                                         None)
+                        body = self._router_interface_action('add',
+                                                         r['router']['id'],
+                                                         s['subnet']['id'],
+                                                         None)
+                        self.assertTrue('port_id' in body)
+
+                        # fetch port and confirm device_id
+                        r_port_id = body['port_id']
+                        body = self._show('ports', r_port_id)
+                        self.assertEquals(body['port']['device_id'],
+                                          r['router']['id'])
+
+                        result = plugin_obj._send_all_data()
+                        self.assertEquals(result[0], 200)
+
+                        body = self._router_interface_action('remove',
+                                                             r['router']['id'],
+                                                             s['subnet']['id'],
+                                                             None)
+                        body = self._show('ports', r_port_id,
+                                          expected_code=exc.HTTPNotFound.code)
+                        body = self._router_interface_action('remove',
+                                                             r1['router']['id'],
+                                                             s1['subnet']['id'],
+                                                             None)

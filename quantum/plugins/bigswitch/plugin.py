@@ -925,15 +925,13 @@ class QuantumRestProxyV2(db_base_plugin_v2.QuantumDbPluginV2,
         with quantum's current view of that data.
         """
         admin_context = qcontext.get_admin_context()
-        networks = {}
-        ports = {}
-        routers = {}
+        networks = []
+        routers = []
 
         all_networks = super(QuantumRestProxyV2,
                              self).get_networks(admin_context) or []
         for net in all_networks:
             mapped_network = self._get_mapped_network_with_subnets(net)
-            networks[net.get('id')] = mapped_network
 
             ports = []
             net_filter = {'network_id': [net.get('id')]}
@@ -947,14 +945,15 @@ class QuantumRestProxyV2(db_base_plugin_v2.QuantumDbPluginV2,
                     'mac': port.get('mac_address'),
                 }
                 ports.append(mapped_port)
-            networks[net.get('id')]['ports'] = ports
+            mapped_network['ports'] = ports
+
+            networks.append(mapped_network)
 
         all_routers = super(QuantumRestProxyV2,
                             self).get_routers(admin_context) or []
         for router in all_routers:
             interfaces = []
             mapped_router = self._map_state_and_status(router)
-            routers[router.get('id')] = mapped_router
             router_filter = {
                 'device_owner': ["network:router_interface"],
                 'device_id': [router.get('id')]
@@ -971,7 +970,10 @@ class QuantumRestProxyV2(db_base_plugin_v2.QuantumDbPluginV2,
                                                              net_id,
                                                              subnet_id)
                 interfaces.append(intf_details)
-            routers[router.get('id')]['interfaces'] = interfaces
+            mapped_router['interfaces'] = interfaces
+
+            routers.append(mapped_router)
+
         try:
             resource = '/topology'
             data = {

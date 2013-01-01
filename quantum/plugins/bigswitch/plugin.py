@@ -141,7 +141,7 @@ class ServerProxy(object):
         headers['Content-type'] = 'application/json'
         headers['Accept'] = 'application/json'
         headers['QuantumProxy-Agent'] = self.name
-        headers['Quantum-ID'] = self.quantum_id
+        headers['Instance-ID'] = self.quantum_id
         if self.auth:
             headers['Authorization'] = self.auth
 

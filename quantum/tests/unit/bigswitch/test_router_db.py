@@ -1,6 +1,6 @@
 # vim: tabstop=4 shiftwidth=4 softtabstop=4
 
-# Copyright 2012 Nicira Networks, Inc.  All rights reserved.
+# Copyright 2013 Big Switch Networks, Inc.  All rights reserved.
 #
 #    Licensed under the Apache License, Version 2.0 (the "License"); you may
 #    not use this file except in compliance with the License. You may obtain
@@ -45,6 +45,14 @@ from quantum.tests.unit.bigswitch import test_restproxy_plugin
 LOG = logging.getLogger(__name__)
 
 
+schema_opts = [
+    cfg.StrOpt('topology', default=''),
+]
+
+
+cfg.CONF.register_opts(schema_opts, "SCHEMA")
+
+
 class HTTPResponseMock():
     status = 200
     reason = 'OK'
@@ -61,15 +69,16 @@ class HTTPConnectionMock():
 
     def __init__(self, server, port, timeout):
         self._validator = Validator()
-        pass
 
     def request(self, action, uri, body, headers):
-        if uri is not '/quantum/v1.1/topology':
-            return
-        schema = {"type":"object","$schema": "http://json-schema.org/draft-03/schema","id": "#","required":true,"properties":{ "networks": { "type":"array", "id": "networks", "required":true, "items": { "type":"object", "id": "0", "required":false, "properties":{ "gateway": { "type":"string", "id": "gateway", "required":true }, "id": { "type":"string", "id": "id", "required":true }, "name": { "type":"string", "id": "name", "required":true }, "ports": { "type":"array", "id": "ports", "required":false, "items": { "type":"object", "id": "0", "required":false, "properties":{ "attachment": { "type":"object", "id": "attachment", "required":false, "properties":{ "id": { "type":"string", "id": "id", "required":true }, "mac": { "type":"string", "id": "mac", "required":true } } }, "device_id": { "type":"string", "id": "device_id", "required":false }, "device_owner": { "type":"string", "id": "device_owner", "required":false }, "fixed_ips": { "type":"array", "id": "fixed_ips", "required":true, "items": { "type":"object", "id": "0", "required":false, "properties":{ "ip_address": { "type":"string", "id": "ip_address", "required":false }, "subnet_id": { "type":"string", "id": "subnet_id", "required":false } } } }, "id": { "type":"string", "id": "id", "required":true }, "mac_address": { "type":"string", "id": "mac_address", "required":false }, "name": { "type":"string", "id": "name", "required":false }, "network_id": { "type":"string", "id": "network_id", "required":true }, "state": { "type":"string", "id": "state", "required":false }, "tenant_id": { "type":"string", "id": "tenant_id", "required":true } } } }, "shared": { "type":"boolean", "id": "shared", "required":false }, "state": { "type":"string", "id": "state", "required":false }, "subnets": { "type":"array", "id": "subnets", "required":false, "items": { "type":"object", "id": "0", "required":false, "properties":{ "allocation_pools": { "type":"array", "id": "allocation_pools", "required":false, "items": { "type":"object", "id": "0", "required":false, "properties":{ "end": { "type":"string", "id": "end", "required":false }, "start": { "type":"string", "id": "start", "required":false } } } }, "cidr": { "type":"string", "id": "cidr", "required":true }, "dns_nameservers": { "type":"array", "id": "dns_nameservers", "required":false }, "enable_dhcp": { "type":"boolean", "id": "enable_dhcp", "required":false }, "gateway_ip": { "type":"string", "id": "gateway_ip", "required":false }, "host_routes": { "type":"array", "id": "host_routes", "required":false }, "id": { "type":"string", "id": "id", "required":true }, "ip_version": { "type":"number", "id": "ip_version", "required":false }, "name": { "type":"string", "id": "name", "required":false }, "network_id": { "type":"string", "id": "network_id", "required":true }, "shared": { "type":"boolean", "id": "shared", "required":false }, "tenant_id": { "type":"string", "id": "tenant_id", "required":true } } } }, "tenant_id": { "type":"string", "id": "tenant_id", "required":true } } } }, "routers": { "type":"array", "id": "routers", "required":true, "items": { "type":"object", "id": "0", "required":false, "properties":{ "external_gateway_info": { "type":"null", "id": "external_gateway_info", "required":false }, "id": { "type":"string", "id": "id", "required":true }, "interfaces": { "type":"array", "id": "interfaces", "required":true, "items": { "type":"object", "id": "0", "required":false, "properties":{ "id": { "type":"string", "id": "id", "required":true }, "network": { "type":"object", "id": "network", "required":true, "properties":{ "gateway": { "type":"string", "id": "gateway", "required":false }, "id": { "type":"string", "id": "id", "required":true }, "name": { "type":"string", "id": "name", "required":false }, "shared": { "type":"boolean", "id": "shared", "required":false }, "state": { "type":"string", "id": "state", "required":false }, "subnets": { "type":"array", "id": "subnets", "required":true, "items": { "type":"object", "id": "0", "required":false, "properties":{ "allocation_pools": { "type":"array", "id": "allocation_pools", "required":false, "items": { "type":"object", "id": "0", "required":false, "properties":{ "end": { "type":"string", "id": "end", "required":false }, "start": { "type":"string", "id": "start", "required":false } } } }, "cidr": { "type":"string", "id": "cidr", "required":true }, "dns_nameservers": { "type":"array", "id": "dns_nameservers", "required":false }, "enable_dhcp": { "type":"boolean", "id": "enable_dhcp", "required":false }, "gateway_ip": { "type":"string", "id": "gateway_ip", "required":false }, "host_routes": { "type":"array", "id": "host_routes", "required":false }, "id": { "type":"string", "id": "id", "required":true }, "ip_version": { "type":"number", "id": "ip_version", "required":false }, "name": { "type":"string", "id": "name", "required":false }, "network_id": { "type":"string", "id": "network_id", "required":true }, "shared": { "type":"boolean", "id": "shared", "required":false }, "tenant_id": { "type":"string", "id": "tenant_id", "required":true } } } }, "tenant_id": { "type":"string", "id": "tenant_id", "required":true } } }, "subnet": { "type":"object", "id": "subnet", "required":true, "properties":{ "allocation_pools": { "type":"array", "id": "allocation_pools", "required":false, "items": { "type":"object", "id": "0", "required":false, "properties":{ "end": { "type":"string", "id": "end", "required":false }, "start": { "type":"string", "id": "start", "required":false } } } }, "cidr": { "type":"string", "id": "cidr", "required":true }, "dns_nameservers": { "type":"array", "id": "dns_nameservers", "required":false }, "enable_dhcp": { "type":"boolean", "id": "enable_dhcp", "required":false }, "gateway_ip": { "type":"string", "id": "gateway_ip", "required":false }, "host_routes": { "type":"array", "id": "host_routes", "required":false }, "id": { "type":"string", "id": "id", "required":true }, "ip_version": { "type":"number", "id": "ip_version", "required":false }, "name": { "type":"string", "id": "name", "required":false }, "network_id": { "type":"string", "id": "network_id", "required":true }, "shared": { "type":"boolean", "id": "shared", "required":false }, "tenant_id": { "type":"string", "id": "tenant_id", "required":true } } } } } }, "name": { "type":"string", "id": "name", "required":false }, "state": { "type":"string", "id": "state", "required":false }, "tenant_id": { "type":"string", "id": "tenant_id", "required":true } } } } }}
+        LOG.error("sumit: inside request uri: %s" % uri)
+        if "/quantum/v1.1/topology" in uri:
 
-        body_dict = json.loads(body)
-        self._validator.validate(body_dict, schema)
+            schema = {"type":"object","$schema": "http://json-schema.org/draft-03/schema","id": "#","required":True,"properties":{ "networks": { "type":"array", "id": "networks", "required":True, "items": { "type":"object", "id": "0", "required":True, "properties":{ "gateway": { "type":"string", "id": "gateway", "required":True }, "id": { "type":"string", "id": "id", "required":True }, "name": { "type":"string", "id": "name", "required":True }, "ports": { "type":"array", "id": "ports", "required":False, "items": { "type":"object", "id": "0", "required":False, "properties":{ "attachment": { "type":"object", "id": "attachment", "required":False, "properties":{ "id": { "type":"string", "id": "id", "required":True }, "mac": { "type":"string", "id": "mac", "required":True } } }, "device_id": { "type":"string", "id": "device_id", "required":False }, "device_owner": { "type":"string", "id": "device_owner", "required":False }, "fixed_ips": { "type":"array", "id": "fixed_ips", "required":True, "items": { "type":"object", "id": "0", "required":False, "properties":{ "ip_address": { "type":"string", "id": "ip_address", "required":False }, "subnet_id": { "type":"string", "id": "subnet_id", "required":False } } } }, "id": { "type":"string", "id": "id", "required":True }, "mac_address": { "type":"string", "id": "mac_address", "required":False }, "name": { "type":"string", "id": "name", "required":False }, "network_id": { "type":"string", "id": "network_id", "required":True }, "state": { "type":"string", "id": "state", "required":False }, "tenant_id": { "type":"string", "id": "tenant_id", "required":True } } } }, "shared": { "type":"boolean", "id": "shared", "required":False }, "state": { "type":"string", "id": "state", "required":False }, "subnets": { "type":"array", "id": "subnets", "required":False, "items": { "type":"object", "id": "0", "required":False, "properties":{ "allocation_pools": { "type":"array", "id": "allocation_pools", "required":False, "items": { "type":"object", "id": "0", "required":False, "properties":{ "end": { "type":"string", "id": "end", "required":False }, "start": { "type":"string", "id": "start", "required":False } } } }, "cidr": { "type":"string", "id": "cidr", "required":True }, "dns_nameservers": { "type":"array", "id": "dns_nameservers", "required":False }, "enable_dhcp": { "type":"boolean", "id": "enable_dhcp", "required":False }, "gateway_ip": { "type":"string", "id": "gateway_ip", "required":False }, "host_routes": { "type":"array", "id": "host_routes", "required":False }, "id": { "type":"string", "id": "id", "required":True }, "ip_version": { "type":"number", "id": "ip_version", "required":False }, "name": { "type":"string", "id": "name", "required":False }, "network_id": { "type":"string", "id": "network_id", "required":True }, "shared": { "type":"boolean", "id": "shared", "required":False }, "tenant_id": { "type":"string", "id": "tenant_id", "required":True } } } }, "tenant_id": { "type":"string", "id": "tenant_id", "required":True } } } }, "routers": { "type":"array", "id": "routers", "required":True, "items": { "type":"object", "id": "0", "required":False, "properties":{ "external_gateway_info": { "type":"null", "id": "external_gateway_info", "required":False }, "id": { "type":"string", "id": "id", "required":True }, "interfaces": { "type":"array", "id": "interfaces", "required":True, "items": { "type":"object", "id": "0", "required":False, "properties":{ "id": { "type":"string", "id": "id", "required":True }, "network": { "type":"object", "id": "network", "required":True, "properties":{ "gateway": { "type":"string", "id": "gateway", "required":False }, "id": { "type":"string", "id": "id", "required":True }, "name": { "type":"string", "id": "name", "required":False }, "shared": { "type":"boolean", "id": "shared", "required":False }, "state": { "type":"string", "id": "state", "required":False }, "subnets": { "type":"array", "id": "subnets", "required":True, "items": { "type":"object", "id": "0", "required":False, "properties":{ "allocation_pools": { "type":"array", "id": "allocation_pools", "required":False, "items": { "type":"object", "id": "0", "required":False, "properties":{ "end": { "type":"string", "id": "end", "required":False }, "start": { "type":"string", "id": "start", "required":False } } } }, "cidr": { "type":"string", "id": "cidr", "required":True }, "dns_nameservers": { "type":"array", "id": "dns_nameservers", "required":False }, "enable_dhcp": { "type":"boolean", "id": "enable_dhcp", "required":False }, "gateway_ip": { "type":"string", "id": "gateway_ip", "required":False }, "host_routes": { "type":"array", "id": "host_routes", "required":False }, "id": { "type":"string", "id": "id", "required":True }, "ip_version": { "type":"number", "id": "ip_version", "required":False }, "name": { "type":"string", "id": "name", "required":False }, "network_id": { "type":"string", "id": "network_id", "required":True }, "shared": { "type":"boolean", "id": "shared", "required":False }, "tenant_id": { "type":"string", "id": "tenant_id", "required":True } } } }, "tenant_id": { "type":"string", "id": "tenant_id", "required":True } } }, "subnet": { "type":"object", "id": "subnet", "required":True, "properties":{ "allocation_pools": { "type":"array", "id": "allocation_pools", "required":False, "items": { "type":"object", "id": "0", "required":False, "properties":{ "end": { "type":"string", "id": "end", "required":False }, "start": { "type":"string", "id": "start", "required":False } } } }, "cidr": { "type":"string", "id": "cidr", "required":True }, "dns_nameservers": { "type":"array", "id": "dns_nameservers", "required":False }, "enable_dhcp": { "type":"boolean", "id": "enable_dhcp", "required":False }, "gateway_ip": { "type":"string", "id": "gateway_ip", "required":False }, "host_routes": { "type":"array", "id": "host_routes", "required":False }, "id": { "type":"string", "id": "id", "required":True }, "ip_version": { "type":"number", "id": "ip_version", "required":False }, "name": { "type":"string", "id": "name", "required":False }, "network_id": { "type":"string", "id": "network_id", "required":True }, "shared": { "type":"boolean", "id": "shared", "required":False }, "tenant_id": { "type":"string", "id": "tenant_id", "required":True } } } } } }, "name": { "type":"string", "id": "name", "required":False }, "state": { "type":"string", "id": "state", "required":False }, "tenant_id": { "type":"string", "id": "tenant_id", "required":True } } } } }}
+
+            body_dict = json.loads(body)
+            self._validator.validate(body_dict, schema)
+
         return
 
     def getresponse(self):
@@ -124,7 +133,9 @@ class RouterDBTestCase(test_l3_plugin.L3NatDBTestCase):
         PluginAwareExtensionManager._instance = None
         etc_path = os.path.join(os.path.dirname(__file__), 'etc')
         test_config['config_files'] = [os.path.join(etc_path,
-                                       'restproxy.ini.test')]
+                                       'restproxy.ini.test'),
+                                       os.path.join(etc_path,
+                                       'jsonschema.ini')]
         test_config['plugin_name_v2'] = (
             'quantum.plugins.bigswitch.plugin.QuantumRestProxyV2')
         # for these tests we need to disable overlapping ips
@@ -283,14 +294,14 @@ class RouterDBTestCase(test_l3_plugin.L3NatDBTestCase):
             with self.subnet() as s:
                 with self.router() as r1:
                     with self.subnet(cidr='10.0.10.0/24') as s1:
+                        self._router_interface_action('add',
+                                                      r1['router']['id'],
+                                                      s1['subnet']['id'],
+                                                      None)
                         body = self._router_interface_action('add',
-                                                         r1['router']['id'],
-                                                         s1['subnet']['id'],
-                                                         None)
-                        body = self._router_interface_action('add',
-                                                         r['router']['id'],
-                                                         s['subnet']['id'],
-                                                         None)
+                                                             r['router']['id'],
+                                                             s['subnet']['id'],
+                                                             None)
                         self.assertTrue('port_id' in body)
 
                         # fetch port and confirm device_id
@@ -302,13 +313,14 @@ class RouterDBTestCase(test_l3_plugin.L3NatDBTestCase):
                         result = plugin_obj._send_all_data()
                         self.assertEquals(result[0], 200)
 
-                        body = self._router_interface_action('remove',
-                                                             r['router']['id'],
-                                                             s['subnet']['id'],
-                                                             None)
-                        body = self._show('ports', r_port_id,
-                                          expected_code=exc.HTTPNotFound.code)
-                        body = self._router_interface_action('remove',
-                                                             r1['router']['id'],
-                                                             s1['subnet']['id'],
-                                                             None)
+                        self._router_interface_action('remove',
+                                                      r['router']['id'],
+                                                      s['subnet']['id'],
+                                                      None)
+                        self._show('ports',
+                                   r_port_id,
+                                   expected_code=exc.HTTPNotFound.code)
+                        self._router_interface_action('remove',
+                                                      r1['router']['id'],
+                                                      s1['subnet']['id'],
+                                                      None)

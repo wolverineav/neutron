@@ -253,14 +253,14 @@ class RouterDBTestCase(test_l3_plugin.L3NatDBTestCase):
             with self.subnet() as s:
                 with self.router() as r1:
                     with self.subnet(cidr='10.0.10.0/24') as s1:
+                        self._router_interface_action('add',
+                                                      r1['router']['id'],
+                                                      s1['subnet']['id'],
+                                                      None)
                         body = self._router_interface_action('add',
-                                                         r1['router']['id'],
-                                                         s1['subnet']['id'],
-                                                         None)
-                        body = self._router_interface_action('add',
-                                                         r['router']['id'],
-                                                         s['subnet']['id'],
-                                                         None)
+                                                             r['router']['id'],
+                                                             s['subnet']['id'],
+                                                             None)
                         self.assertTrue('port_id' in body)
 
                         # fetch port and confirm device_id
@@ -272,13 +272,14 @@ class RouterDBTestCase(test_l3_plugin.L3NatDBTestCase):
                         result = plugin_obj._send_all_data()
                         self.assertEquals(result[0], 200)
 
-                        body = self._router_interface_action('remove',
-                                                             r['router']['id'],
-                                                             s['subnet']['id'],
-                                                             None)
-                        body = self._show('ports', r_port_id,
-                                          expected_code=exc.HTTPNotFound.code)
-                        body = self._router_interface_action('remove',
-                                                             r1['router']['id'],
-                                                             s1['subnet']['id'],
-                                                             None)
+                        self._router_interface_action('remove',
+                                                      r['router']['id'],
+                                                      s['subnet']['id'],
+                                                      None)
+                        self._show('ports',
+                                   r_port_id,
+                                   expected_code=exc.HTTPNotFound.code)
+                        self._router_interface_action('remove',
+                                                      r1['router']['id'],
+                                                      s1['subnet']['id'],
+                                                      None)

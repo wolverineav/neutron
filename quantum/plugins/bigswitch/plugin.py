@@ -1048,6 +1048,8 @@ class QuantumRestProxyV2(db_base_plugin_v2.QuantumDbPluginV2,
             else:
                 resource['state'] = 'DOWN'
             del resource['admin_state_up']
+        else:
+            resource['state'] = 'UP'
 
         if 'status' in resource:
             del resource['status']

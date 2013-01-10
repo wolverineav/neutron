@@ -53,25 +53,27 @@ class Router_db_mixin(l3_db.L3_NAT_db_mixin):
 
         return super(Router_db_mixin, self).create_router(context, router)
 
+    """
     def create_floatingip(self, context, floatingip):
-        """
-        This should ideally be raising not implemented exception.
-        However, we Horizon will complain in that case, hence we dont
-        do that.
-        """
-        pass
+        return super(Router_db_mixin, self).creating_floatingip(context,
+                                                                floatingip)
 
     def update_floatingip(self, context, id, floatingip):
-        pass
+        return super(Router_db_mixin, self).update_floatingip(context, id,
+                                                              floatingip)
 
     def delete_floatingip(self, context, id):
-        pass
+        return super(Router_db_mixin, self).delete_floatingip(context, id)
 
     def get_floatingip(self, context, id, fields=None):
-        pass
+        return super(Router_db_mixin, self).get_floatingip(context, id,
+                                                           fields)
 
     def get_floatingips(self, context, filters=None, fields=None):
-        pass
+        return super(Router_db_mixin, self).get_floatingips(context, filters,
+                                                            fields)
 
     def get_floatingips_count(self, context, filters=None):
-        pass
+        return super(Router_db_mixin, self).get_floatingips_count(context,
+                                                                  filters)
+    """

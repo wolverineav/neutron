@@ -43,6 +43,7 @@ LOG = logging.getLogger(__name__)
 
 class Router_db_mixin(l3_db.L3_NAT_db_mixin):
 
+    """
     def create_router(self, context, router):
         LOG.error("Router_db_mixin.create_router() called")
         r = router['router']
@@ -53,7 +54,6 @@ class Router_db_mixin(l3_db.L3_NAT_db_mixin):
 
         return super(Router_db_mixin, self).create_router(context, router)
 
-    """
     def create_floatingip(self, context, floatingip):
         return super(Router_db_mixin, self).creating_floatingip(context,
                                                                 floatingip)

@@ -742,9 +742,7 @@ class QuantumRestProxyV2(db_base_plugin_v2.QuantumDbPluginV2,
         try:
             self._send_update_network(orig_net)
         except RemoteRestError as e:
-            # rollback creation of subnet
-            super(QuantumRestProxyV2, self).update_subnet(context, id,
-                                                          orig_subnet)
+            # TODO (Sumit): rollback deletion of subnet
             raise
 
     def create_router(self, context, router):
@@ -919,6 +917,70 @@ class QuantumRestProxyV2(db_base_plugin_v2.QuantumDbPluginV2,
         # return new interface
         return del_intf_info
 
+    def create_floatingip(self, context, floatingip):
+        LOG.debug("QuantumRestProxyV2: create_floatingip() called")
+
+        # create floatingip in DB
+        new_fl_ip = super(QuantumRestProxyV2,
+                          self).create_floatingip(context, floatingip)
+
+        net_id = new_fl_ip['floating_network_id']
+        orig_net = super(QuantumRestProxyV2, self).get_network(context,
+                                                               net_id)
+        # create floatingip on the network controller
+        try:
+            self._send_update_network(orig_net)
+        except RemoteRestError as e:
+            LOG.error("QuantumRestProxyV2:Unable to create remote floatingip: "
+                      "%s" % e.message)
+            super(QuantumRestProxyV2, self).delete_floatingip(context,
+                                                              floatingip)
+            raise
+
+        # return created floating IP
+        return new_fl_ip
+
+    def update_floatingip(self, context, id, floatingip):
+        LOG.debug("QuantumRestProxyV2: update_floatingip() called")
+
+        orig_fl_ip = super(QuantumRestProxyV2, self).get_floatingip(context,
+                                                                    id)
+
+        # update floatingip in DB
+        new_fl_ip = super(QuantumRestProxyV2,
+                          self).update_floatingip(context, id, floatingip)
+
+        net_id = new_fl_ip['floating_network_id']
+        orig_net = super(QuantumRestProxyV2, self).get_network(context,
+                                                               net_id)
+        # update network on network controller
+        try:
+            self._send_update_network(orig_net)
+        except RemoteRestError as e:
+            # rollback updation of subnet
+            super(QuantumRestProxyV2, self).update_floatingip(context, id,
+                                                              floatingip)
+            raise
+        return new_fl_ip
+
+    def delete_floatingip(self, context, id):
+        LOG.debug("QuantumRestProxyV2: delete_floatingip() called")
+
+        orig_fl_ip = super(QuantumRestProxyV2, self).get_floatingip(context,
+                                                                    id)
+        # delete floating IP in DB
+        net_id = orig_fl_ip['floating_network_id']
+        super(QuantumRestProxyV2, self).delete_floatingip(context, id)
+
+        orig_net = super(QuantumRestProxyV2, self).get_network(context,
+                                                               net_id)
+        # update network on network controller
+        try:
+            self._send_update_network(orig_net)
+        except RemoteRestError as e:
+            # TODO(Sumit): rollback deletion of floating IP
+            raise
+
     def _send_all_data(self):
         """Pushes all data to network ctrl (networks/ports, ports/attachments)
         to give the controller an option to re-sync it's persistent store
@@ -990,6 +1052,20 @@ class QuantumRestProxyV2(db_base_plugin_v2.QuantumDbPluginV2,
                 e.message)
             raise
 
+    def _get_network_with_floatingips(self, network):
+        admin_context = qcontext.get_admin_context()
+
+        if 'router:external' in network:
+            if network['router:external']:
+                net_id = network['id']
+                net_filter = {'floating_network_id': [net_id]}
+                fl_ips = super(QuantumRestProxyV2,
+                               self).get_floatingips(admin_context,
+                                                     filters=net_filter) or []
+                network['floatingips'] = fl_ips
+
+        return network
+
     def _get_all_subnets_json_for_network(self, net_id):
         admin_context = qcontext.get_admin_context()
         subnets = self._get_subnets_by_network(admin_context,
@@ -1028,8 +1104,9 @@ class QuantumRestProxyV2(db_base_plugin_v2.QuantumDbPluginV2,
         try:
             resource = NETWORKS_PATH % (tenant_id, net_id)
             mapped_network = self._get_mapped_network_with_subnets(network)
+            net_with_fl_ips = self._get_network_with_floatingips(network)
             data = {
-                "network": mapped_network,
+                "network": net_with_fl_ips,
             }
             ret = self.servers.put(resource, data)
             if not self.servers.action_success(ret):

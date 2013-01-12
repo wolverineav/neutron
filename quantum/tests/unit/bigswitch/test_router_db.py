@@ -99,6 +99,7 @@ class L3TestExtensionManager(object):
 
 class RouterDBTestCase(test_l3_plugin.L3NatDBTestCase):
 
+    """
     def _create_network(self, fmt, name, admin_status_up,
                         arg_list=None, **kwargs):
         data = {'network': {'name': name,
@@ -116,6 +117,7 @@ class RouterDBTestCase(test_l3_plugin.L3NatDBTestCase):
                 '', kwargs['tenant_id'])
 
         return network_req.get_response(self.api)
+    """
 
     def setUp(self):
 
@@ -201,13 +203,50 @@ class RouterDBTestCase(test_l3_plugin.L3NatDBTestCase):
                     # remove extra port created
                     self._delete('ports', p2['port']['id'])
 
+    def test_create_floatingip_no_ext_gateway_return_404(self):
+        with self.subnet(cidr='10.0.10.0/24') as public_sub:
+            self._set_net_external(public_sub['subnet']['network_id'])
+            with self.port() as private_port:
+                with self.router() as r:
+                    res = self._create_floatingip(
+                        'json',
+                        public_sub['subnet']['network_id'],
+                        port_id=private_port['port']['id'])
+                    # this should be some kind of error
+                    self.assertEqual(res.status_int, exc.HTTPNotFound.code)
+
+    def test_router_update_gateway(self):
+        with self.router() as r:
+            with self.subnet() as s1:
+                with self.subnet(cidr='10.0.10.0/24') as s2:
+                    self._set_net_external(s1['subnet']['network_id'])
+                    self._add_external_gateway_to_router(
+                        r['router']['id'],
+                        s1['subnet']['network_id'])
+                    body = self._show('routers', r['router']['id'])
+                    net_id = (body['router']
+                              ['external_gateway_info']['network_id'])
+                    self.assertEquals(net_id, s1['subnet']['network_id'])
+                    self._set_net_external(s2['subnet']['network_id'])
+                    self._add_external_gateway_to_router(
+                        r['router']['id'],
+                        s2['subnet']['network_id'])
+                    body = self._show('routers', r['router']['id'])
+                    net_id = (body['router']
+                              ['external_gateway_info']['network_id'])
+                    self.assertEquals(net_id, s2['subnet']['network_id'])
+                    self._remove_external_gateway_from_router(
+                        r['router']['id'],
+                        s2['subnet']['network_id'])
+
     def tearDown(self):
         super(RouterDBTestCase, self).tearDown()
         self.httpPatch.stop()
 
     def test_router_add_interface_overlapped_cidr(self):
-        self.skipTest("Plugin does not support external gateway for router")
+        self.skipTest("Plugin does not support")
 
+    """
     def test_create_router_with_gwinfo(self):
         self.skipTest("Plugin does not support external gateway for router")
 
@@ -288,6 +327,7 @@ class RouterDBTestCase(test_l3_plugin.L3NatDBTestCase):
 
     def test_create_external_network_admin_suceeds(self):
         self.skipTest("Plugin does not support external networks")
+    """
 
     def test_send_data(self):
         plugin_obj = QuantumManager.get_plugin()

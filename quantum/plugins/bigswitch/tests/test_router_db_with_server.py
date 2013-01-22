@@ -67,24 +67,6 @@ class RouterDBTestCase(test_l3_plugin.L3NatDBTestCase):
     cntrl_proc.daemon = True
     cntrl_proc.start()
 
-    def _create_network(self, fmt, name, admin_status_up,
-                        arg_list=None, **kwargs):
-        data = {'network': {'name': name,
-                            'admin_state_up': admin_status_up,
-                            'tenant_id': self._tenant_id}}
-        for arg in (('admin_state_up', 'tenant_id', 'shared') +
-                    (arg_list or ())):
-            # Arg must be present and not empty
-            if arg in kwargs and kwargs[arg]:
-                data['network'][arg] = kwargs[arg]
-        network_req = self.new_create_request('networks', data, fmt)
-        if (kwargs.get('set_context') and 'tenant_id' in kwargs):
-            # create a specific auth context for this request
-            network_req.environ['quantum.context'] = context.Context(
-                '', kwargs['tenant_id'])
-
-        return network_req.get_response(self.api)
-
     def setUp(self):
 
         super(RouterDBTestCase, self).setUp()
@@ -163,96 +145,14 @@ class RouterDBTestCase(test_l3_plugin.L3NatDBTestCase):
     def tearDown(self):
         super(RouterDBTestCase, self).tearDown()
 
-    def test_router_add_interface_overlapped_cidr(self):
-        self.skipTest("Plugin does not support external gateway for router")
-
-    def test_create_router_with_gwinfo(self):
-        self.skipTest("Plugin does not support external gateway for router")
-
-    def test_router_add_gateway(self):
-        self.skipTest("Plugin does not support external gateway for router")
-
-    def test_router_update_gateway(self):
-        self.skipTest("Plugin does not support external gateway for router")
-
-    def test_router_add_gateway_invalid_network(self):
-        self.skipTest("Plugin does not support external gateway for router")
-
-    def test_router_add_gateway_net_not_external(self):
-        self.skipTest("Plugin does not support external gateway for router")
-
-    def test_router_add_gateway_no_subnet(self):
-        self.skipTest("Plugin does not support external gateway for router")
-
-    def floatingip_with_assoc(self, port_id=None, fmt='json'):
-        self.skipTest("Plugin does not support floating IPs")
-
-    def floatingip_no_assoc(self, private_sub, fmt='json'):
-        self.skipTest("Plugin does not support floating IPs")
-
-    def test_floatingip_crd_ops(self):
-        self.skipTest("Plugin does not support floating IPs")
-
-    def test_floatingip_with_assoc_fails(self):
-        self.skipTest("Plugin does not support floating IPs")
-
-    def test_router_delete_with_floatingip(self):
-        self.skipTest("Plugin does not support floating IPs")
-
-    def test_floatingip_update(self):
-        self.skipTest("Plugin does not support floating IPs")
-
-    def test_floatingip_with_assoc(self):
-        self.skipTest("Plugin does not support floating IPs")
-
-    def test_floatingip_port_delete(self):
-        self.skipTest("Plugin does not support floating IPs")
-
-    def test_two_fips_one_port_invalid_return_409(self):
-        self.skipTest("Plugin does not support floating IPs")
-
-    def test_floating_ip_direct_port_delete_returns_409(self):
-        self.skipTest("Plugin does not support floating IPs")
-
-    def test_create_floatingip_no_ext_gateway_return_404(self):
-        self.skipTest("Plugin does not support floating IPs")
-
-    def test_create_floating_non_ext_network_returns_400(self):
-        self.skipTest("Plugin does not support floating IPs")
-
-    def test_create_floatingip_no_public_subnet_returns_400(self):
-        self.skipTest("Plugin does not support floating IPs")
-
-    def test_create_floatingip_invalid_floating_network_id_returns_400(self):
-        self.skipTest("Plugin does not support floating IPs")
-
-    def test_create_floatingip_invalid_floating_port_id_returns_400(self):
-        self.skipTest("Plugin does not support floating IPs")
-
-    def test_create_floatingip_invalid_fixed_ip_address_returns_400(self):
-        self.skipTest("Plugin does not support floating IPs")
-
-    def test_list_nets_external(self):
-        self.skipTest("Plugin does not support external networks")
-
-    def test_create_port_external_network_non_admin_fails(self):
-        self.skipTest("Plugin does not support external networks")
-
-    def test_create_port_external_network_admin_suceeds(self):
-        self.skipTest("Plugin does not support external networks")
-
-    def test_create_external_network_non_admin_fails(self):
-        self.skipTest("Plugin does not support external networks")
-
-    def test_create_external_network_admin_suceeds(self):
-        self.skipTest("Plugin does not support external networks")
-
     def test_send_data(self):
+        ctx = context.Context(None, None, is_admin=True)
+        fmt='json'
         plugin_obj = QuantumManager.get_plugin()
         with self.router() as r:
-            with self.subnet() as s:
+            with self.subnet(cidr='10.0.10.0/24') as s:
                 with self.router() as r1:
-                    with self.subnet(cidr='10.0.10.0/24') as s1:
+                    with self.subnet(cidr='10.0.20.0/24') as s1:
                         self._router_interface_action('add',
                                                       r1['router']['id'],
                                                       s1['subnet']['id'],
@@ -263,14 +163,41 @@ class RouterDBTestCase(test_l3_plugin.L3NatDBTestCase):
                                                              None)
                         self.assertTrue('port_id' in body)
 
-                        # fetch port and confirm device_id
                         r_port_id = body['port_id']
                         body = self._show('ports', r_port_id)
                         self.assertEquals(body['port']['device_id'],
                                           r['router']['id'])
 
-                        result = plugin_obj._send_all_data()
-                        self.assertEquals(result[0], 200)
+                        with self.subnet(cidr='11.0.0.0/24') as public_sub:
+                            self._set_net_external(public_sub['subnet']['network_id'])
+                            with self.port() as private_port:
+                                sid = private_port['port']['fixed_ips'][0]['subnet_id']
+                                private_sub = {'subnet': {'id': sid}}
+                                self._add_external_gateway_to_router(
+                                        r['router']['id'],
+                                        public_sub['subnet']['network_id'])
+                                self._router_interface_action('add', r['router']['id'],
+                                                              private_sub['subnet']['id'],
+                                                              None)
+
+                                res = self._create_floatingip(
+                                                fmt,
+                                                public_sub['subnet']['network_id'],
+                                                port_id=private_port['port']['id'])
+                                self.assertEqual(res.status_int, exc.HTTPCreated.code)
+                                floatingip = self.deserialize(fmt, res)
+
+                                result = plugin_obj._send_all_data()
+                                self.assertEquals(result[0], 200)
+
+                                self._delete('floatingips', floatingip['floatingip']['id'])
+                                self._remove_external_gateway_from_router(
+                                            r['router']['id'],
+                                            public_sub['subnet']['network_id'])
+                                self._router_interface_action('remove',
+                                                              r['router']['id'],
+                                                              private_sub['subnet']['id'],
+                                                              None)
 
                         self._router_interface_action('remove',
                                                       r['router']['id'],

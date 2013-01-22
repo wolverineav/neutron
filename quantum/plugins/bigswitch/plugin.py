@@ -59,6 +59,7 @@ from quantum.db import api as db
 from quantum.db import db_base_plugin_v2
 from quantum.db import dhcp_rpc_base
 from quantum.db import models_v2
+from quantum.extensions import l3
 from quantum.openstack.common import cfg
 from quantum.openstack.common import log as logging
 from quantum.openstack.common import rpc
@@ -634,22 +635,6 @@ class QuantumRestProxyV2(db_base_plugin_v2.QuantumDbPluginV2,
             port = super(QuantumRestProxyV2, self).get_port(context, port_id)
             mac = port["mac_address"]
 
-            for ip in port["fixed_ips"]:
-                if ip.get("subnet_id") is not None:
-                    subnet = super(QuantumRestProxyV2, self).get_subnet(
-                        context, ip["subnet_id"])
-                    gateway = subnet.get("gateway_ip")
-                    if gateway is not None:
-                        resource = NETWORKS_PATH % (tenant_id, net_id)
-                        orig_net = super(QuantumRestProxyV2,
-                                         self).get_network(context, net_id)
-                        mapped_network = self._map_state_and_status(orig_net)
-                        mapped_network['gateway'] = gateway
-                        data = {"network": mapped_network}
-                        ret = self.servers.put(resource, data)
-                        if not self.servers.action_success(ret):
-                            raise RemoteRestError(ret[2])
-
             if mac is not None:
                 resource = ATTACHMENT_PATH % (tenant_id, net_id, port_id)
                 data = {"attachment":
@@ -994,6 +979,7 @@ class QuantumRestProxyV2(db_base_plugin_v2.QuantumDbPluginV2,
                              self).get_networks(admin_context) or []
         for net in all_networks:
             mapped_network = self._get_mapped_network_with_subnets(net)
+            net_fl_ips = self._get_network_with_floatingips(mapped_network)
 
             ports = []
             net_filter = {'network_id': [net.get('id')]}
@@ -1007,9 +993,9 @@ class QuantumRestProxyV2(db_base_plugin_v2.QuantumDbPluginV2,
                     'mac': port.get('mac_address'),
                 }
                 ports.append(mapped_port)
-            mapped_network['ports'] = ports
+            net_fl_ips['ports'] = ports
 
-            networks.append(mapped_network)
+            networks.append(net_fl_ips)
 
         all_routers = super(QuantumRestProxyV2,
                             self).get_routers(admin_context) or []
@@ -1023,7 +1009,6 @@ class QuantumRestProxyV2(db_base_plugin_v2.QuantumDbPluginV2,
             router_ports = super(QuantumRestProxyV2,
                                  self).get_ports(admin_context,
                                                  filters=router_filter) or []
-            #LOG.error("Sumit: ports %s" % router_ports)
             for port in router_ports:
                 net_id = port.get('network_id')
                 subnet_id = port['fixed_ips'][0]['subnet_id']
@@ -1055,14 +1040,12 @@ class QuantumRestProxyV2(db_base_plugin_v2.QuantumDbPluginV2,
     def _get_network_with_floatingips(self, network):
         admin_context = qcontext.get_admin_context()
 
-        if 'router:external' in network:
-            if network['router:external']:
-                net_id = network['id']
-                net_filter = {'floating_network_id': [net_id]}
-                fl_ips = super(QuantumRestProxyV2,
-                               self).get_floatingips(admin_context,
-                                                     filters=net_filter) or []
-                network['floatingips'] = fl_ips
+        net_id = network['id']
+        net_filter = {'floating_network_id': [net_id]}
+        fl_ips = super(QuantumRestProxyV2,
+                       self).get_floatingips(admin_context,
+                                             filters=net_filter) or []
+        network['floatingips'] = fl_ips
 
         return network
 
@@ -1080,6 +1063,7 @@ class QuantumRestProxyV2(db_base_plugin_v2.QuantumDbPluginV2,
         return subnets_details
 
     def _get_mapped_network_with_subnets(self, network):
+        admin_context = qcontext.get_admin_context()
         network = self._map_state_and_status(network)
         subnets = self._get_all_subnets_json_for_network(network['id'])
         network['subnets'] = subnets
@@ -1095,6 +1079,9 @@ class QuantumRestProxyV2(db_base_plugin_v2.QuantumDbPluginV2,
         if not gateway_ip:
             network['gateway'] = ""
 
+        network[l3.EXTERNAL] = self._network_is_external(admin_context,
+                                                         network['id'])
+
         return network
 
     def _send_update_network(self, network):
@@ -1104,9 +1091,9 @@ class QuantumRestProxyV2(db_base_plugin_v2.QuantumDbPluginV2,
         try:
             resource = NETWORKS_PATH % (tenant_id, net_id)
             mapped_network = self._get_mapped_network_with_subnets(network)
-            net_with_fl_ips = self._get_network_with_floatingips(network)
+            net_fl_ips = self._get_network_with_floatingips(mapped_network)
             data = {
-                "network": net_with_fl_ips,
+                "network": net_fl_ips,
             }
             ret = self.servers.put(resource, data)
             if not self.servers.action_success(ret):

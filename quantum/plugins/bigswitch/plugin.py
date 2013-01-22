@@ -105,7 +105,8 @@ SUCCESS_CODES = range(200, 207)
 FAILURE_CODES = [0, 301, 302, 303, 400, 401, 403, 404, 500, 501, 502, 503,
                  504, 505]
 SYNTAX_ERROR_MESSAGE = 'Syntax error in server config file, aborting plugin'
-BASE_URI = '/quantum/v1.1'
+BASE_URI = '/networkService/v1.1'
+ORCHESTRATION_SERVICE_ID = 'Quantum v2.0'
 
 
 class RemoteRestError(exceptions.QuantumException):
@@ -143,6 +144,7 @@ class ServerProxy(object):
         headers['Accept'] = 'application/json'
         headers['QuantumProxy-Agent'] = self.name
         headers['Instance-ID'] = self.quantum_id
+        headers['Orchestration-Service-ID'] = ORCHESTRATION_SERVICE_ID
         if self.auth:
             headers['Authorization'] = self.auth
 

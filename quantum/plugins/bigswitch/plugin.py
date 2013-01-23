@@ -492,10 +492,11 @@ class QuantumRestProxyV2(db_base_plugin_v2.QuantumDbPluginV2,
                 raise RemoteRestError(ret[2])
 
             # connect device to network, if present
-            if port["port"].get("device_id"):
+            device_id = port["port"].get("device_id")
+            if device_id:
                 self._plug_interface(context,
                                      net["tenant_id"], net["id"],
-                                     new_port["id"], new_port["id"] + "00")
+                                     new_port["id"], device_id)
         except RemoteRestError as e:
             LOG.error("QuantumRestProxyV2: Unable to create remote port: %s" %
                       e.message)
@@ -561,10 +562,11 @@ class QuantumRestProxyV2(db_base_plugin_v2.QuantumDbPluginV2,
                     self._unplug_interface(context, orig_port["tenant_id"],
                                            orig_port["network_id"],
                                            orig_port["id"])
-                if new_port.get("device_id"):
+                device_id = new_port.get("device_id")
+                if device_id:
                     self._plug_interface(context, new_port["tenant_id"],
                                          new_port["network_id"],
-                                         new_port["id"], new_port["id"] + "00")
+                                         new_port["id"], device_id)
 
         except RemoteRestError as e:
             LOG.error(
@@ -991,7 +993,7 @@ class QuantumRestProxyV2(db_base_plugin_v2.QuantumDbPluginV2,
             for port in net_ports:
                 mapped_port = self._map_state_and_status(port)
                 mapped_port['attachment'] = {
-                    'id': port.get('id') + '00',
+                    'id': port.get('device_id'),
                     'mac': port.get('mac_address'),
                 }
                 ports.append(mapped_port)

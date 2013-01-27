@@ -22,14 +22,14 @@
 
 # if vcsversion exists, use it. Else, use LOCALBRANCH:LOCALREVISION
 try:
-    from bigswitch.vcsversion import version_info
+    from quantum.plugins.bigswitch.vcsversion import version_info
 except ImportError:
     version_info = {'branch_nick': u'LOCALBRANCH',
                     'revision_id': u'LOCALREVISION',
                     'revno': 0}
 
 
-QUANTUMRESTPROXY_VERSION = ['2012', '1', None]
+QUANTUMRESTPROXY_VERSION = ['2013', '1', None]
 YEAR, COUNT, REVISION = QUANTUMRESTPROXY_VERSION
 FINAL = False   # This becomes true at Release Candidate time
 

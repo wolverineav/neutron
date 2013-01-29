@@ -84,6 +84,7 @@ restproxy_opts = [
     cfg.BoolOpt('syncdata', default=False),
     cfg.IntOpt('servertimeout', default=10),
     cfg.StrOpt('quantumid', default='Quantum'),
+    cfg.BoolOpt('addmetaserverroute', default=True),
 ]
 
 
@@ -107,6 +108,7 @@ FAILURE_CODES = [0, 301, 302, 303, 400, 401, 403, 404, 500, 501, 502, 503,
 SYNTAX_ERROR_MESSAGE = 'Syntax error in server config file, aborting plugin'
 BASE_URI = '/networkService/v1.1'
 ORCHESTRATION_SERVICE_ID = 'Quantum v2.0'
+METADATA_SERVER_IP = '169.254.169.254'
 
 
 class RemoteRestError(exceptions.QuantumException):
@@ -282,6 +284,7 @@ class QuantumRestProxyV2(db_base_plugin_v2.QuantumDbPluginV2,
         syncdata = cfg.CONF.RESTPROXY.syncdata
         timeout = cfg.CONF.RESTPROXY.servertimeout
         quantumid = cfg.CONF.RESTPROXY.quantumid
+        self.addmetaserverroute = cfg.CONF.RESTPROXY.addmetaserverroute
 
         # validate config
         assert servers is not None, 'Servers not defined. Aborting plugin'
@@ -479,6 +482,11 @@ class QuantumRestProxyV2(db_base_plugin_v2.QuantumDbPluginV2,
         new_port = super(QuantumRestProxyV2, self).create_port(context, port)
         net = super(QuantumRestProxyV2,
                     self).get_network(context, new_port["network_id"])
+
+        if self.addmetaserverroute:
+            if new_port['device_owner'] == 'network:dhcp':
+                destination = METADATA_SERVER_IP + '/32'
+                self._add_host_route(context, destination, new_port)
 
         # create on networl ctrl
         try:
@@ -1040,6 +1048,18 @@ class QuantumRestProxyV2(db_base_plugin_v2.QuantumDbPluginV2,
                 'QuantumRestProxy: Unable to update remote topology: %s' %
                 e.message)
             raise
+
+    def _add_host_route(self, context, destination, port):
+        subnet = {}
+        for fixed_ip in port['fixed_ips']:
+            subnet_id = fixed_ip['subnet_id']
+            nexthop = fixed_ip['ip_address']
+            subnet['host_routes'] = [{'destination': destination,
+                                      'nexthop': nexthop}]
+            self.update_subnet(context, subnet_id, {'subnet': subnet})
+            LOG.debug("Adding host route: ")
+            LOG.debug("destination:%s nexthop:%s" % (destination,
+                                                     nexthop))
 
     def _get_network_with_floatingips(self, network):
         admin_context = qcontext.get_admin_context()

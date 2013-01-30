@@ -64,6 +64,7 @@ from quantum.openstack.common import cfg
 from quantum.openstack.common import log as logging
 from quantum.openstack.common import rpc
 from quantum.openstack.common.rpc import dispatcher
+from quantum.plugins.bigswitch.common import lockutils
 from quantum.plugins.bigswitch import router_db
 from quantum.plugins.bigswitch.version import version_string_with_vcs
 
@@ -138,6 +139,7 @@ class ServerProxy(object):
         if auth:
             self.auth = 'Basic ' + base64.encodestring(auth).strip()
 
+    @lockutils.synchronized('rest_call', 'bsn-', external=True)
     def rest_call(self, action, resource, data, headers):
         uri = self.base_uri + resource
         body = json.dumps(data)

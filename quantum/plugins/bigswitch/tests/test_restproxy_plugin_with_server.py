@@ -70,13 +70,15 @@ class TestBigSwitchProxyV2HTTPResponseWServer(test_plugin.TestV2HTTPResponse,
 class TestBigSwitchProxyPortsV2WithServer(test_plugin.TestPortsV2,
                                           V2TestCaseWithServer):
 
-    pass
+    def test_create_ports_bulk_emulated_plugin_failure(self):
+        self.skipTest("Plugin does not support")
 
 
 class TestBigSwitchProxyNetworksV2WithServer(test_plugin.TestNetworksV2,
                                              V2TestCaseWithServer):
 
-    pass
+    def test_create_networks_bulk_emulated_plugin_failure(self):
+        self.skipTest("Plugin does not support")
 
 
 class TestBigSwitchProxySubnetsV2WithServer(test_plugin.TestSubnetsV2,

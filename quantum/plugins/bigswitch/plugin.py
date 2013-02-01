@@ -52,12 +52,12 @@ import socket
 
 from quantum.common import constants as const
 from quantum.common import exceptions
-#from quantum.common import rpc as q_rpc
 from quantum.common import topics
 from quantum import context as qcontext
 from quantum.db import api as db
 from quantum.db import db_base_plugin_v2
 from quantum.db import dhcp_rpc_base
+from quantum.db import l3_db
 from quantum.db import models_v2
 from quantum.extensions import l3
 from quantum.openstack.common import cfg
@@ -65,7 +65,6 @@ from quantum.openstack.common import log as logging
 from quantum.openstack.common import rpc
 from quantum.openstack.common.rpc import dispatcher
 from quantum.plugins.bigswitch.common import lockutils
-from quantum.plugins.bigswitch import router_db
 from quantum.plugins.bigswitch.version import version_string_with_vcs
 
 
@@ -259,12 +258,11 @@ class RpcProxy(dhcp_rpc_base.DhcpRpcCallbackMixin):
     RPC_API_VERSION = '1.0'
 
     def create_rpc_dispatcher(self):
-        #return q_rpc.PluginRpcDispatcher([self])
         return dispatcher.RpcDispatcher([self])
 
 
 class QuantumRestProxyV2(db_base_plugin_v2.QuantumDbPluginV2,
-                         router_db.Router_db_mixin):
+                         l3_db.L3_NAT_db_mixin):
 
     supported_extension_aliases = ["router"]
 
@@ -438,6 +436,17 @@ class QuantumRestProxyV2(db_base_plugin_v2.QuantumDbPluginV2,
         orig_net = super(QuantumRestProxyV2, self).get_network(context, net_id)
         tenant_id = orig_net["tenant_id"]
 
+        filter = {'network_id': [net_id]}
+        ports = self.get_ports(context, filters=filter)
+
+        # check if there are any tenant owned ports in-use
+        auto_delete_port_owners = db_base_plugin_v2.AUTO_DELETE_PORT_OWNERS
+        only_auto_del = all(p['device_owner'] in auto_delete_port_owners
+                            for p in ports)
+
+        if not only_auto_del:
+            raise exceptions.NetworkInUse(net_id=net_id)
+
         # delete from network ctrl. Remote error on delete is ignored
         try:
             resource = NETWORKS_PATH % (tenant_id, net_id)
@@ -604,6 +613,17 @@ class QuantumRestProxyV2(db_base_plugin_v2.QuantumDbPluginV2,
 
         LOG.debug("QuantumRestProxyV2: delete_port() called")
 
+        # if needed, check to see if this is a port owned by
+        # and l3-router.  If so, we should prevent deletion.
+        if l3_port_check:
+            self.prevent_l3_port_deletion(context, port_id)
+        self.disassociate_floatingips(context, port_id)
+
+        ret_val = super(QuantumRestProxyV2, self).delete_port(context,
+                                                              port_id)
+        return ret_val
+
+    def _delete_port(self, context, port_id):
         # Delete from DB
         port = super(QuantumRestProxyV2, self).get_port(context, port_id)
 
@@ -615,16 +635,11 @@ class QuantumRestProxyV2(db_base_plugin_v2.QuantumDbPluginV2,
             if not self.servers.action_success(ret):
                 raise RemoteRestError(ret[2])
 
-            # if needed, check to see if this is a port owned by
-            # and l3-router.  If so, we should prevent deletion.
-            if l3_port_check:
-                self.prevent_l3_port_deletion(context, port_id)
-
             if port.get("device_id"):
                 self._unplug_interface(context, port["tenant_id"],
                                        port["network_id"], port["id"])
-            ret_val = super(QuantumRestProxyV2, self).delete_port(context,
-                                                                  port_id)
+            ret_val = super(QuantumRestProxyV2, self)._delete_port(context,
+                                                                   port_id)
             return ret_val
         except RemoteRestError as e:
             LOG.error(
@@ -712,7 +727,7 @@ class QuantumRestProxyV2(db_base_plugin_v2.QuantumDbPluginV2,
 
         self._warn_on_state_status(subnet['subnet'])
 
-        orig_subnet = super(QuantumRestProxyV2, self).get_subnet(context, id)
+        orig_subnet = super(QuantumRestProxyV2, self)._get_subnet(context, id)
 
         # update subnet in DB
         new_subnet = super(QuantumRestProxyV2, self).update_subnet(context, id,
@@ -728,6 +743,7 @@ class QuantumRestProxyV2(db_base_plugin_v2.QuantumDbPluginV2,
             super(QuantumRestProxyV2, self).update_subnet(context, id,
                                                           orig_subnet)
             raise
+
         return new_subnet
 
     def delete_subnet(self, context, id):
@@ -815,10 +831,24 @@ class QuantumRestProxyV2(db_base_plugin_v2.QuantumDbPluginV2,
     def delete_router(self, context, router_id):
         LOG.debug("QuantumRestProxyV2: delete_router() called")
 
-        # Validate args
-        orig_router = super(QuantumRestProxyV2, self).get_router(context,
-                                                                 router_id)
-        tenant_id = orig_router["tenant_id"]
+        with context.session.begin(subtransactions=True):
+            orig_router = self._get_router(context, router_id)
+            tenant_id = orig_router["tenant_id"]
+
+            # Ensure that the router is not used
+            router_filter = {'router_id': [router_id]}
+            fips = self.get_floatingips_count(context.elevated(),
+                                              filters=router_filter)
+            if fips:
+                raise l3.RouterInUse(router_id=router_id)
+
+            device_owner = l3_db.DEVICE_OWNER_ROUTER_INTF
+            device_filter = {'device_id': [router_id],
+                             'device_owner': [device_owner]}
+            ports = self.get_ports_count(context.elevated(),
+                                         filters=device_filter)
+            if ports:
+                raise l3.RouterInUse(router_id=router_id)
 
         # delete from network ctrl. Remote error on delete is ignored
         try:
@@ -886,7 +916,7 @@ class QuantumRestProxyV2(db_base_plugin_v2.QuantumDbPluginV2,
         # we will first get the interface identifier before deleting in the DB
         if not interface_info:
             msg = "Either subnet_id or port_id must be specified"
-            raise q_exc.BadRequest(resource='router', msg=msg)
+            raise exceptions.BadRequest(resource='router', msg=msg)
         if 'port_id' in interface_info:
             port = self._get_port(context, interface_info['port_id'])
             interface_id = port['network_id']
@@ -895,7 +925,7 @@ class QuantumRestProxyV2(db_base_plugin_v2.QuantumDbPluginV2,
             interface_id = subnet['network_id']
         else:
             msg = "Either subnet_id or port_id must be specified"
-            raise q_exc.BadRequest(resource='router', msg=msg)
+            raise exceptions.BadRequest(resource='router', msg=msg)
 
         # remove router in DB
         del_intf_info = super(QuantumRestProxyV2,

@@ -220,12 +220,18 @@ class RouterDBTestCase(test_l3_plugin.L3NatDBTestCase):
                         r['router']['id'],
                         s2['subnet']['network_id'])
 
+    def test_router_add_interface_overlapped_cidr(self):
+        self.skipTest("Plugin does not support")
+
+    def test_list_nets_external(self):
+        self.skipTest("Plugin does not support")
+
+    def test_router_update_gateway_with_existed_floatingip(self):
+        self.skipTest("Plugin does not support")
+
     def tearDown(self):
         super(RouterDBTestCase, self).tearDown()
         self.httpPatch.stop()
-
-    def test_router_add_interface_overlapped_cidr(self):
-        self.skipTest("Plugin does not support")
 
     def test_send_data(self):
         ctx = context.Context(None, None, is_admin=True)

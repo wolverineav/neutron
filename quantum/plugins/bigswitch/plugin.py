@@ -64,6 +64,7 @@ from quantum.extensions import l3
 from quantum.openstack.common import cfg
 from quantum.openstack.common import lockutils
 from quantum.openstack.common import log as logging
+from quantum.openstack.common.notifier import api as notifier_api
 from quantum.openstack.common import rpc
 from quantum.plugins.bigswitch.version import version_string_with_vcs
 
@@ -310,6 +311,7 @@ class QuantumRestProxyV2(db_base_plugin_v2.QuantumDbPluginV2,
         if syncdata:
             self._send_all_data()
 
+        self._publisher_id = notifier_api.publisher_id('network')
         LOG.debug("QuantumRestProxyV2: initialization done")
 
     def create_network(self, context, network):
@@ -1089,7 +1091,15 @@ class QuantumRestProxyV2(db_base_plugin_v2.QuantumDbPluginV2,
             nexthop = fixed_ip['ip_address']
             subnet['host_routes'] = [{'destination': destination,
                                       'nexthop': nexthop}]
-            self.update_subnet(context, subnet_id, {'subnet': subnet})
+            updated_subnet = self.update_subnet(context,
+                                                subnet_id,
+                                                {'subnet': subnet})
+            payload = {'subnet': updated_subnet}
+            notifier_api.notify(context,
+                                self._publisher_id,
+                                'subnet.update.end',
+                                notifier_api.INFO,
+                                payload)
             LOG.debug("Adding host route: ")
             LOG.debug("destination:%s nexthop:%s" % (destination,
                                                      nexthop))

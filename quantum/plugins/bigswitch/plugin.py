@@ -1070,8 +1070,15 @@ class QuantumRestProxyV2(db_base_plugin_v2.QuantumDbPluginV2,
             resource = '/topology'
             data = {
                 'networks': networks,
+            }
+            """
+            The backend does not expect us to send routers for this version
+            hence disabling.
+            data = {
+                'networks': networks,
                 'routers': routers,
             }
+            """
             ret = self.servers.put(resource, data)
             if not self.servers.action_success(ret):
                 raise RemoteRestError(ret[2])

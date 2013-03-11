@@ -63,12 +63,14 @@ from quantum.db import api as db
 from quantum.db import db_base_plugin_v2
 from quantum.db import dhcp_rpc_base
 from quantum.db import l3_db
+from quantum.db.loadbalancer import loadbalancer_db
 from quantum.extensions import l3
 from quantum.extensions import portbindings
 from quantum.openstack.common import lockutils
 from quantum.openstack.common import log as logging
 from quantum.openstack.common import rpc
 from quantum.plugins.bigswitch.version import version_string_with_vcs
+from quantum.plugins.common import constants
 from quantum import policy
 
 
@@ -282,9 +284,10 @@ class RpcProxy(dhcp_rpc_base.DhcpRpcCallbackMixin):
 
 
 class QuantumRestProxyV2(db_base_plugin_v2.QuantumDbPluginV2,
-                         l3_db.L3_NAT_db_mixin):
+                         l3_db.L3_NAT_db_mixin,
+                         loadbalancer_db.LoadBalancerPluginDb):
 
-    supported_extension_aliases = ["router", "binding"]
+    supported_extension_aliases = ["router", "binding", "lbaas"]
 
     binding_view = "extension:port_binding:view"
     binding_set = "extension:port_binding:set"
@@ -1242,3 +1245,71 @@ class QuantumRestProxyV2(db_base_plugin_v2.QuantumDbPluginV2,
                 portbindings.CAP_PORT_FILTER:
                 'security-group' in self.supported_extension_aliases}
         return port
+
+    """
+    Loadbalancer API implementation.
+    """
+    def create_vip(self, context, vip):
+        LOG.debug(_("QuantumRestProxyV2: LB create_vip() called"))
+        v = super(QuantumRestProxyV2, self).create_vip(context, vip)
+        return v
+
+    def update_vip(self, context, id, vip):
+        LOG.debug(_("QuantumRestProxyV2: LB update_vip() called"))
+        v = super(QuantumRestProxyV2, self).update_vip(context, id, vip)
+        return v
+
+    def delete_vip(self, context, id):
+        LOG.debug(_("QuantumRestProxyV2: LB delete_vip() called"))
+        super(QuantumRestProxyV2, self).delete_vip(context, id)
+
+    def create_pool(self, context, pool):
+        LOG.debug(_("QuantumRestProxyV2: LB create_pool() called"))
+        p = super(QuantumRestProxyV2, self).create_pool(context, pool)
+        return p
+
+    def update_pool(self, context, id, pool):
+        LOG.debug(_("QuantumRestProxyV2: LB update_pool() called"))
+        p = super(QuantumRestProxyV2, self).update_pool(context, id, pool)
+        return p
+
+    def delete_pool(self, context, id):
+        LOG.debug(_("QuantumRestProxyV2: LB delete_pool() called"))
+        super(QuantumRestProxyV2, self).delete_pool(context, id)
+
+    def create_member(self, context, member):
+        LOG.debug(_("QuantumRestProxyV2: LB create_member() called"))
+        m = super(QuantumRestProxyV2, self).create_member(context, member)
+        return m
+
+    def update_member(self, context, id, member):
+        LOG.debug(_("QuantumRestProxyV2: LB update_member() called"))
+        m = super(QuantumRestProxyV2, self).update_member(context, id, member)
+        return m
+
+    def delete_member(self, context, id):
+        LOG.debug(_("QuantumRestProxyV2: LB delete_member() called"))
+        super(QuantumRestProxyV2, self).delete_member(context, id)
+
+    def update_health_monitor(self, context, id, health_monitor):
+        LOG.debug(_("QuantumRestProxyV2: LB update_health_monitor() called"))
+        hm = super(QuantumRestProxyV2, self).update_health_monitor(
+            context,
+            id,
+            health_monitor
+        )
+        return hm
+
+    def delete_health_monitor(self, context, id):
+        LOG.debug(_("QuantumRestProxyV2: LB delete_health_monitor() called"))
+        super(QuantumRestProxyV2, self).delete_health_monitor(context, id)
+
+    def create_pool_health_monitor(self, context, health_monitor, pool_id):
+        LOG.debug(_("QuantumRestProxyV2: create_pool_health_monitor() called"))
+        retval = super(QuantumRestProxyV2, self).create_pool_health_monitor(
+            context,
+            health_monitor,
+            pool_id
+        )
+
+        return retval

@@ -45,62 +45,6 @@ class FirewallInvalidPortValue(qexception.InvalidInput):
     message = _("Invalid value for port %(port)s")
 
 
-RESOURCE_ATTRIBUTE_MAP = {
-    'firewall_rules': {
-        'id': {'allow_post': False, 'allow_put': False,
-               'validate': {'type:uuid': None},
-               'is_visible': True,
-               'primary_key': True},
-        'direction': {'allow_post': True, 'allow_put': True,
-                      'is_visible': True,
-                      'validate': {'type:values': ['ingress', 'egress']}},
-        'protocol': {'allow_post': True, 'allow_put': False,
-                     'is_visible': True, 'default': None,
-                     'convert_to': convert_protocol_to_case_insensitive,
-                     'validate': {'type:values': fw_supported_protocols}},
-        'source_ip_address': {'allow_post': True, 'allow_put': True,
-                             'validate': {'type:ip_address_or_none': None},
-                             'is_visible': True, 'default': None},
-        'destination_ip_address': {'allow_post': True, 'allow_put': True,
-            'validate': {'type:ip_address_or_none': None},
-            'is_visible': True, 'default': None},
-        'port_range_min': {'allow_post': True, 'allow_put': False,
-                           'convert_to': convert_validate_port_value,
-                           'default': None, 'is_visible': True},
-        'port_range_max': {'allow_post': True, 'allow_put': False,
-                           'convert_to': convert_validate_port_value,
-                           'default': None, 'is_visible': True},
-        'application': {'allow_post': True, 'allow_put': True,
-                        'validate': {'type:string': None},
-                        'is_visible': True, 'default': ''},
-        'action': {'allow_post': True, 'allow_put': True,
-                   'convert_to': convert_action_to_case_insensitive,
-                   'validate': {'type:values': fw_supported_actions},
-                   'is_visible': True, 'default': 'deny'},
-        'dynamic_attributes': {'allow_post': True, 'allow_put': True,
-                            'convert_to': convert_none_to_empty_list,
-                            'default': ATTR_NOT_SPECIFIED,
-                            'validate': {'type:nameservers': None},
-                            # TODO (Sumit):
-                            # this needs to change to validate for attr names
-                            'is_visible': True},
-        'tenant_id': {'allow_post': True, 'allow_put': False,
-                      'required_by_policy': True,
-                      'is_visible': True},
-        'description': {'allow_post': True, 'allow_put': True,
-                        'validate': {'type:string': None},
-                        'is_visible': True, 'default': ''},
-        SHARED: {'allow_post': False,
-                 'allow_put': False,
-                 'default': True,
-                 'convert_to': convert_to_boolean,
-                 'is_visible': True,
-                 'required_by_policy': True,
-                 'enforce_policy': True},
-    },
-}
-
-
 fw_supported_protocols = [None, 'tcp', 'udp', 'icmp']
 fw_supported_actions = ['allow', 'deny']
 
@@ -141,6 +85,55 @@ def convert_validate_port_value(port):
 
 def convert_none_to_empty_list(value):
     return [] if value is None else value
+RESOURCE_ATTRIBUTE_MAP = {
+    'firewall_rules': {
+        'id': {'allow_post': False, 'allow_put': False,
+               'validate': {'type:uuid': None},
+               'is_visible': True,
+               'primary_key': True},
+        'direction': {'allow_post': True, 'allow_put': True,
+                      'is_visible': True,
+                      'validate': {'type:values': ['ingress', 'egress']}},
+        'protocol': {'allow_post': True, 'allow_put': False,
+                     'is_visible': True, 'default': None,
+                     'convert_to': convert_protocol_to_case_insensitive,
+                     'validate': {'type:values': fw_supported_protocols}},
+        'source_ip_address': {'allow_post': True, 'allow_put': True,
+                              'validate': {'type:ip_address_or_none': None},
+                              'is_visible': True, 'default': None},
+        'destination_ip_address': {'allow_post': True, 'allow_put': True,
+                                   'validate': {'type:ip_address_or_none':
+                                                None},
+                                   'is_visible': True, 'default': None},
+        'port_range_min': {'allow_post': True, 'allow_put': False,
+                           'convert_to': convert_validate_port_value,
+                           'default': None, 'is_visible': True},
+        'port_range_max': {'allow_post': True, 'allow_put': False,
+                           'convert_to': convert_validate_port_value,
+                           'default': None, 'is_visible': True},
+        'application': {'allow_post': True, 'allow_put': True,
+                        'validate': {'type:string': None},
+                        'is_visible': True, 'default': ''},
+        'action': {'allow_post': True, 'allow_put': True,
+                   'convert_to': convert_action_to_case_insensitive,
+                   'validate': {'type:values': fw_supported_actions},
+                   'is_visible': True, 'default': 'deny'},
+        # TODO (Sumit): # this needs to change to hold attr names
+        'dynamic_attributes': {'allow_post': True, 'allow_put': True,
+                               'validate': {'type:string': None},
+                               'default': '', 'is_visible': True},
+        'tenant_id': {'allow_post': True, 'allow_put': False,
+                      'required_by_policy': True,
+                      'is_visible': True},
+        'description': {'allow_post': True, 'allow_put': True,
+                        'validate': {'type:string': None},
+                        'is_visible': True, 'default': ''},
+        'shared': {'allow_post': False, 'allow_put': False,
+                   'default': True, 'convert_to': attr.convert_to_boolean,
+                   'is_visible': True, 'required_by_policy': True,
+                   'enforce_policy': True},
+    },
+}
 
 
 class Firewall(extensions.ExtensionDescriptor):
@@ -171,7 +164,7 @@ class Firewall(extensions.ExtensionDescriptor):
         attr.PLURALS.update(dict(my_plurals))
         resources = []
         plugin = manager.QuantumManager.get_service_plugins()[
-            constants.LOADBALANCER]
+            constants.FIREWALL]
         for collection_name in RESOURCE_ATTRIBUTE_MAP:
             # Special handling needed for resources with 'y' ending
             # (e.g. proxies -> proxy)
@@ -191,28 +184,8 @@ class Firewall(extensions.ExtensionDescriptor):
             resource = extensions.ResourceExtension(
                 collection_name,
                 controller,
-                path_prefix=constants.COMMON_PREFIXES[constants.LOADBALANCER],
+                path_prefix=constants.COMMON_PREFIXES[constants.FIREWALL],
                 member_actions=member_actions,
-                attr_map=params)
-            resources.append(resource)
-
-        for collection_name in SUB_RESOURCE_ATTRIBUTE_MAP:
-            # Special handling needed for sub-resources with 'y' ending
-            # (e.g. proxies -> proxy)
-            resource_name = collection_name[:-1]
-            parent = SUB_RESOURCE_ATTRIBUTE_MAP[collection_name].get('parent')
-            params = SUB_RESOURCE_ATTRIBUTE_MAP[collection_name].get(
-                'parameters')
-
-            controller = base.create_resource(collection_name, resource_name,
-                                              plugin, params,
-                                              allow_bulk=True,
-                                              parent=parent)
-
-            resource = extensions.ResourceExtension(
-                collection_name,
-                controller, parent,
-                path_prefix=constants.COMMON_PREFIXES[constants.LOADBALANCER],
                 attr_map=params)
             resources.append(resource)
 

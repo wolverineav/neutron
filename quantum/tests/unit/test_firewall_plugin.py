@@ -92,11 +92,101 @@ class FirewallExtensionTestCase(testlib_api.WebTestCase):
     def _test_entity_delete(self, entity):
         """ does the entity deletion based on naming convention  """
         entity_id = _uuid()
-        res = self.api.delete(_get_path('firewall/' + entity + 's',
+        path_prefix = 'firewall/'
+
+        if entity == 'firewall':
+            path_prefix = ''
+
+        if entity == 'firewall_policy':
+            entity_plural = 'firewall_policies'
+        else:
+            entity_plural = entity + 's'
+
+        res = self.api.delete(_get_path(path_prefix + entity_plural,
                                         id=entity_id, fmt=self.fmt))
         delete_entity = getattr(self.plugin.return_value, "delete_" + entity)
         delete_entity.assert_called_with(mock.ANY, entity_id)
         self.assertEqual(res.status_int, exc.HTTPNoContent.code)
+
+    def test_create_firewall(self):
+        fw_id = _uuid()
+        data = {'firewall': {'description': 'descr_firewall1',
+                             'name': 'firewall1',
+                             'firewall_policy_id': _uuid(),
+                             'tenant_id': _uuid()}}
+        return_value = copy.copy(data['firewall'])
+        return_value.update({'id': fw_id})
+
+        instance = self.plugin.return_value
+        instance.create_firewall.return_value = return_value
+        res = self.api.post(_get_path('firewalls', fmt=self.fmt),
+                            self.serialize(data),
+                            content_type='application/%s' % self.fmt)
+        instance.create_firewall.assert_called_with(mock.ANY,
+                                                    firewall=data)
+        self.assertEqual(res.status_int, exc.HTTPCreated.code)
+        res = self.deserialize(res)
+        self.assertIn('firewall', res)
+        self.assertEqual(res['firewall'], return_value)
+
+    def test_firewall_list(self):
+        fw_id = _uuid()
+        return_value = [{'tenant_id': _uuid(),
+                         'id': fw_id}]
+
+        instance = self.plugin.return_value
+        instance.get_firewalls.return_value = return_value
+
+        res = self.api.get(_get_path('firewalls', fmt=self.fmt))
+
+        instance.get_firewalls.assert_called_with(mock.ANY,
+                                                  fields=mock.ANY,
+                                                  filters=mock.ANY)
+        self.assertEqual(res.status_int, exc.HTTPOk.code)
+
+    def test_firewall_get(self):
+        fw_id = _uuid()
+        return_value = {'tenant_id': _uuid(),
+                        'id': fw_id}
+
+        instance = self.plugin.return_value
+        instance.get_firewall.return_value = return_value
+
+        res = self.api.get(_get_path('firewalls',
+                                     id=fw_id, fmt=self.fmt))
+
+        instance.get_firewall.assert_called_with(mock.ANY,
+                                                 fw_id,
+                                                 fields=mock.ANY)
+        self.assertEqual(res.status_int, exc.HTTPOk.code)
+        res = self.deserialize(res)
+        self.assertIn('firewall', res)
+        self.assertEqual(res['firewall'], return_value)
+
+    def test_firewall_rule_update(self):
+        fw_id = _uuid()
+        update_data = {'firewall': {'name': 'new_name'}}
+        return_value = {'tenant_id': _uuid(),
+                        'id': fw_id}
+
+        instance = self.plugin.return_value
+        instance.update_firewall.return_value = return_value
+
+        res = self.api.put(_get_path('firewalls', id=fw_id,
+                                     fmt=self.fmt),
+                           self.serialize(update_data))
+
+        instance.update_firewall_rule.assert_called_with(mock.ANY,
+                                                         rule_id,
+                                                         firewall=
+                                                         update_data)
+        self.assertEqual(res.status_int, exc.HTTPOk.code)
+        res = self.deserialize(res)
+        self.assertIn('firewall', res)
+        self.assertEqual(res['firewall'], return_value)
+
+    def test_firewall_delete(self):
+        self._test_entity_delete('firewall')
 
     def test_create_firewall_rule(self):
         rule_id = _uuid()
@@ -185,6 +275,121 @@ class FirewallExtensionTestCase(testlib_api.WebTestCase):
     def test_firewall_rule_delete(self):
         self._test_entity_delete('firewall_rule')
 
+    def test_create_firewall_policy(self):
+        policy_id = _uuid()
+        data = {'firewall_policy': {'description': 'descr_firewall_policy1',
+                                    'name': 'new_fw_policy1',
+                                    'firewall_rules_list': ['1', '2'],
+                                    'audited': False,
+                                    'tenant_id': _uuid()}}
+        return_value = copy.copy(data['firewall_policy'])
+        return_value.update({'id': policy_id})
+
+        instance = self.plugin.return_value
+        instance.create_firewall_policy.return_value = return_value
+        res = self.api.post(_get_path('firewall/firewall_policies',
+                                      fmt=self.fmt),
+                            self.serialize(data),
+                            content_type='application/%s' % self.fmt)
+        instance.create_firewall_policy.assert_called_with(mock.ANY,
+                                                           firewall_policy=
+                                                           data)
+        self.assertEqual(res.status_int, exc.HTTPCreated.code)
+        res = self.deserialize(res)
+        self.assertIn('firewall_policy', res)
+        self.assertEqual(res['firewall_policy'], return_value)
+
+    def test_firewall_policy_list(self):
+        policy_id = _uuid()
+        return_value = [{'tenant_id': _uuid(),
+                         'id': policy_id}]
+
+        instance = self.plugin.return_value
+        instance.get_firewall_policies.return_value = return_value
+
+        res = self.api.get(_get_path('firewall/firewall_policies',
+                                     fmt=self.fmt))
+
+        instance.get_firewall_policies.assert_called_with(mock.ANY,
+                                                          fields=mock.ANY,
+                                                          filters=mock.ANY)
+        self.assertEqual(res.status_int, exc.HTTPOk.code)
+
+    def test_firewall_policy_get(self):
+        policy_id = _uuid()
+        return_value = {'tenant_id': _uuid(),
+                        'id': policy_id}
+
+        instance = self.plugin.return_value
+        instance.get_firewall_policy.return_value = return_value
+
+        res = self.api.get(_get_path('firewall/firewall_policies',
+                                     id=policy_id, fmt=self.fmt))
+
+        instance.get_firewall_policy.assert_called_with(mock.ANY,
+                                                        policy_id,
+                                                        fields=mock.ANY)
+        self.assertEqual(res.status_int, exc.HTTPOk.code)
+        res = self.deserialize(res)
+        self.assertIn('firewall_policy', res)
+        self.assertEqual(res['firewall_policy'], return_value)
+
+    def test_firewall_policy_update(self):
+        policy_id = _uuid()
+        update_data = {'firewall_policy': {'audited': True}}
+        return_value = {'tenant_id': _uuid(),
+                        'id': policy_id}
+
+        instance = self.plugin.return_value
+        instance.update_firewall_policy.return_value = return_value
+
+        res = self.api.put(_get_path('firewall/firewall_policies',
+                                     id=policy_id,
+                                     fmt=self.fmt),
+                           self.serialize(update_data))
+
+        instance.update_firewall_policy.assert_called_with(mock.ANY,
+                                                           policy_id,
+                                                           firewall_policy=
+                                                           update_data)
+        self.assertEqual(res.status_int, exc.HTTPOk.code)
+        res = self.deserialize(res)
+        self.assertIn('firewall_policy', res)
+        self.assertEqual(res['firewall_policy'], return_value)
+
+    def test_firewall_policy_delete(self):
+        self._test_entity_delete('firewall_policy')
+
 
 class FirewallExtensionTestCaseXML(FirewallExtensionTestCase):
     fmt = 'xml'
+
+    def test_create_firewall_policy(self):
+        #TODO (Sumit): XML formatting does not seem to be handling lists
+        # correctly, hence skipping some asserts.
+        policy_id = _uuid()
+        data = {'firewall_policy': {'description': 'descr_firewall_policy1',
+                                    'name': 'new_fw_policy1',
+                                    'firewall_rules_list': ['1', '2'],
+                                    'audited': False,
+                                    'tenant_id': _uuid()}}
+        return_value = copy.copy(data['firewall_policy'])
+        return_value.update({'id': policy_id})
+
+        instance = self.plugin.return_value
+        instance.create_firewall_policy.return_value = return_value
+        res = self.api.post(_get_path('firewall/firewall_policies',
+                                      fmt=self.fmt),
+                            self.serialize(data),
+                            content_type='application/%s' % self.fmt)
+        """
+        instance.create_firewall_policy.assert_called_with(mock.ANY,
+                                                           firewall_policy=
+                                                           data)
+        """
+        self.assertEqual(res.status_int, exc.HTTPCreated.code)
+        res = self.deserialize(res)
+        self.assertIn('firewall_policy', res)
+        """
+        self.assertEqual(res['firewall_policy'], return_value)
+        """

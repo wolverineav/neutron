@@ -133,6 +133,53 @@ RESOURCE_ATTRIBUTE_MAP = {
                    'is_visible': True, 'required_by_policy': True,
                    'enforce_policy': True},
     },
+    'firewall_policies': {
+        'id': {'allow_post': False, 'allow_put': False,
+               'validate': {'type:uuid': None},
+               'is_visible': True,
+               'primary_key': True},
+        'tenant_id': {'allow_post': True, 'allow_put': False,
+                      'required_by_policy': True,
+                      'is_visible': True},
+        'description': {'allow_post': True, 'allow_put': True,
+                        'validate': {'type:string': None},
+                        'is_visible': True, 'default': ''},
+        'name': {'allow_post': True, 'allow_put': True,
+                 'validate': {'type:string': None},
+                 'is_visible': True, 'default': ''},
+        'firewall_rules_list': {'allow_post': True, 'allow_put': True,
+                                'default': [], 'is_visible': True},
+        'shared': {'allow_post': False, 'allow_put': False,
+                   'default': True, 'convert_to': attr.convert_to_boolean,
+                   'is_visible': True, 'required_by_policy': True,
+                   'enforce_policy': True},
+        'audited': {'allow_post': True, 'allow_put': True,
+                    'default': False, 'convert_to': attr.convert_to_boolean,
+                    'is_visible': True, 'required_by_policy': True,
+                    'enforce_policy': True},
+    },
+    'firewalls': {
+        'id': {'allow_post': False, 'allow_put': False,
+               'validate': {'type:uuid': None},
+               'is_visible': True,
+               'primary_key': True},
+        'tenant_id': {'allow_post': True, 'allow_put': False,
+                      'required_by_policy': True,
+                      'is_visible': True},
+        'description': {'allow_post': True, 'allow_put': True,
+                        'validate': {'type:string': None},
+                        'is_visible': True, 'default': ''},
+        'name': {'allow_post': True, 'allow_put': True,
+                 'validate': {'type:string': None},
+                 'is_visible': True, 'default': ''},
+        'firewall_policy_id': {'allow_post': True, 'allow_put': True,
+                               'validate': {'type:uuid': None},
+                               'is_visible': True},
+        'shared': {'allow_post': False, 'allow_put': False,
+                   'default': True, 'convert_to': attr.convert_to_boolean,
+                   'is_visible': True, 'required_by_policy': True,
+                   'enforce_policy': True},
+    },
 }
 
 
@@ -167,13 +214,14 @@ class Firewall(extensions.ExtensionDescriptor):
             constants.FIREWALL]
         for collection_name in RESOURCE_ATTRIBUTE_MAP:
             # Special handling needed for resources with 'y' ending
-            # (e.g. proxies -> proxy)
-            resource_name = collection_name[:-1]
+            if collection_name == 'firewall_policies':
+                resource_name = 'firewall_policy'
+            else:
+                resource_name = collection_name[:-1]
+
             params = RESOURCE_ATTRIBUTE_MAP[collection_name]
 
             member_actions = {}
-            if resource_name == 'pool':
-                member_actions = {'stats': 'GET'}
 
             controller = base.create_resource(
                 collection_name, resource_name, plugin, params,
@@ -181,12 +229,19 @@ class Firewall(extensions.ExtensionDescriptor):
                 allow_pagination=cfg.CONF.allow_pagination,
                 allow_sorting=cfg.CONF.allow_sorting)
 
-            resource = extensions.ResourceExtension(
-                collection_name,
-                controller,
-                path_prefix=constants.COMMON_PREFIXES[constants.FIREWALL],
-                member_actions=member_actions,
-                attr_map=params)
+            if resource_name == 'firewall':
+                resource = extensions.ResourceExtension(
+                    collection_name,
+                    controller,
+                    member_actions=member_actions,
+                    attr_map=params)
+            else:
+                resource = extensions.ResourceExtension(
+                    collection_name,
+                    controller,
+                    path_prefix=constants.COMMON_PREFIXES[constants.FIREWALL],
+                    member_actions=member_actions,
+                    attr_map=params)
             resources.append(resource)
 
         return resources
@@ -219,6 +274,26 @@ class FirewallPluginBase(ServicePluginBase):
         return 'Firewall service plugin'
 
     @abc.abstractmethod
+    def get_firewalls(self, context, filters=None, fields=None):
+        pass
+
+    @abc.abstractmethod
+    def get_firewall(self, context, id, fields=None):
+        pass
+
+    @abc.abstractmethod
+    def create_firewall(self, context, firewall):
+        pass
+
+    @abc.abstractmethod
+    def update_firewall(self, context, id, firewall):
+        pass
+
+    @abc.abstractmethod
+    def delete_firewall(self, context, id):
+        pass
+
+    @abc.abstractmethod
     def get_firewall_rules(self, context, filters=None, fields=None):
         pass
 
@@ -236,4 +311,24 @@ class FirewallPluginBase(ServicePluginBase):
 
     @abc.abstractmethod
     def delete_firewall_rule(self, context, id):
+        pass
+
+    @abc.abstractmethod
+    def get_firewall_policy(self, context, filters=None, fields=None):
+        pass
+
+    @abc.abstractmethod
+    def get_firewall_policies(self, context, filters=None, fields=None):
+        pass
+
+    @abc.abstractmethod
+    def create_firewall_policy(self, context, firewall_policy):
+        pass
+
+    @abc.abstractmethod
+    def update_firewall_policy(self, context, id, firewall_policy):
+        pass
+
+    @abc.abstractmethod
+    def delete_firewall_policy(self, context, id):
         pass

@@ -157,6 +157,10 @@ RESOURCE_ATTRIBUTE_MAP = {
                     'default': False, 'convert_to': attr.convert_to_boolean,
                     'is_visible': True, 'required_by_policy': True,
                     'enforce_policy': True},
+        'shared': {'allow_post': False, 'allow_put': False,
+                   'default': True, 'convert_to': attr.convert_to_boolean,
+                   'is_visible': True, 'required_by_policy': True,
+                   'enforce_policy': True},
     },
     'firewalls': {
         'id': {'allow_post': False, 'allow_put': False,

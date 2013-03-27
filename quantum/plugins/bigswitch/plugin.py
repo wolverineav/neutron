@@ -64,6 +64,7 @@ from quantum.db import db_base_plugin_v2
 from quantum.db import dhcp_rpc_base
 from quantum.db import l3_db
 from quantum.db.loadbalancer import loadbalancer_db
+from quantum.extensions import firewall
 from quantum.extensions import l3
 from quantum.extensions import portbindings
 from quantum.openstack.common import lockutils
@@ -285,9 +286,10 @@ class RpcProxy(dhcp_rpc_base.DhcpRpcCallbackMixin):
 
 class QuantumRestProxyV2(db_base_plugin_v2.QuantumDbPluginV2,
                          l3_db.L3_NAT_db_mixin,
+                         firewall.FirewallPluginBase,
                          loadbalancer_db.LoadBalancerPluginDb):
 
-    supported_extension_aliases = ["router", "binding", "lbaas"]
+    supported_extension_aliases = ["router", "binding", "firewall", "lbaas"]
 
     binding_view = "extension:port_binding:view"
     binding_set = "extension:port_binding:set"
@@ -334,6 +336,11 @@ class QuantumRestProxyV2(db_base_plugin_v2.QuantumDbPluginV2,
 
         self._dhcp_agent_notifier = dhcp_rpc_agent_api.DhcpAgentNotifyAPI()
         LOG.debug(_("QuantumRestProxyV2: initialization done"))
+
+    def get_plugin_services(self):
+        supported_svcs = {constants.FIREWALL:'Firewall service plugin',
+                          constants.LOADBALANCER:'Loadbalancer service plugin'}
+        return supported_svcs
 
     def create_network(self, context, network):
         """Create a network, which represents an L2 network segment which
@@ -1245,6 +1252,53 @@ class QuantumRestProxyV2(db_base_plugin_v2.QuantumDbPluginV2,
                 portbindings.CAP_PORT_FILTER:
                 'security-group' in self.supported_extension_aliases}
         return port
+
+    def get_firewalls(self, context, filters=None, fields=None):
+        LOG.error(_("QuantumRestProxyV2: get_firewalls() called"))
+        return [{'id':'12343243', 'shared':True}]
+
+    def get_firewall(self, context, id, fields=None):
+        pass
+
+    def create_firewall(self, context, firewall):
+        LOG.error(_("QuantumRestProxyV2: create_firewall() called"))
+        return {'id': '12343243'}
+
+    def update_firewall(self, context, id, firewall):
+        pass
+
+    def delete_firewall(self, context, id):
+        pass
+
+    def get_firewall_rules(self, context, filters=None, fields=None):
+        pass
+
+    def get_firewall_rule(self, context, id, fields=None):
+        pass
+
+    def create_firewall_rule(self, context, firewall_rule):
+        pass
+
+    def update_firewall_rule(self, context, id, firewall_rule):
+        pass
+
+    def delete_firewall_rule(self, context, id):
+        pass
+
+    def get_firewall_policy(self, context, filters=None, fields=None):
+        pass
+
+    def get_firewall_policies(self, context, filters=None, fields=None):
+        pass
+
+    def create_firewall_policy(self, context, firewall_policy):
+        pass
+
+    def update_firewall_policy(self, context, id, firewall_policy):
+        pass
+
+    def delete_firewall_policy(self, context, id):
+        pass
 
     """
     Loadbalancer API implementation.

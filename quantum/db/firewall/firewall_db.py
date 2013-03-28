@@ -32,14 +32,16 @@ LOG = logging.getLogger(__name__)
 
 
 class FirewallPolicyRuleAssociation(model_base.BASEV2, models_v2.HasId):
-    firewall_policy_id = sa.Column(sa.String(36),
-                                   sa.ForeignKey('firewall_policies.id'))
+    __tablename__ = 'firewall_policy_rule_association'
     firewall_rule_id = sa.Column(sa.String(36),
-                                 sa.ForeignKey('firewall_rules.id'))
+                                 sa.ForeignKey('firewall_rule.id'))
+    firewall_policy_id = sa.Column(sa.String(36),
+                                   sa.ForeignKey('firewall_policy.id'))
 
 
 class FirewallRule(model_base.BASEV2, models_v2.HasId, models_v2.HasTenant):
     """Represents a Firewall rule."""
+    __tablename__ = 'firewall_rule'
     direction = sa.Column(sa.Enum('ingress', 'egress',
                                   name='firewallrules_direction'))
     protocol = sa.Column(sa.String(40))
@@ -56,21 +58,23 @@ class FirewallRule(model_base.BASEV2, models_v2.HasId, models_v2.HasTenant):
 
 class FirewallPolicy(model_base.BASEV2, models_v2.HasId, models_v2.HasTenant):
     """Represents a Firewall Policy resource"""
+    __tablename__ = 'firewall_policy'
     name = sa.Column(sa.String(255))
     description = sa.Column(sa.String(1024))
     firewall_rules = orm.relationship(FirewallRule,
-                                      secondary=FirewallPolicyRuleAssociation)
+                                      secondary='firewall_policy_rule_association')
     audited = sa.Column(sa.Boolean)
 
 
 class Firewall(model_base.BASEV2, models_v2.HasId, models_v2.HasTenant):
     """Represents a Firewall resource"""
+    __tablename__ = 'firewall'
     name = sa.Column(sa.String(255))
     description = sa.Column(sa.String(1024))
     status = sa.Column(sa.String(16))
     admin_state_up = sa.Column(sa.Boolean)
     firewall_policy_id = sa.Column(sa.String(36),
-                                   sa.ForeignKey('firewall_policies.id'))
+                                   sa.ForeignKey('firewall_policy.id'))
 
 
 class Firewall_db_mixin(firewall.FirewallPluginBase):

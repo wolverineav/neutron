@@ -344,7 +344,7 @@ class FirewallPluginBase(ServicePluginBase):
         pass
 
     @abc.abstractmethod
-    def get_firewall_policy(self, context, filters=None, fields=None):
+    def get_firewall_policy(self, context, id, fields=None):
         pass
 
     @abc.abstractmethod

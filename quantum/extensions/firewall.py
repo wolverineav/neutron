@@ -31,6 +31,30 @@ from quantum.plugins.services.service_base import ServicePluginBase
 
 
 # Firewall Exceptions
+class FirewallNotFound(qexception.NotFound):
+    message = _("Firewall %(firewall_id)s could not be found")
+
+
+class FirewallInUse(qexception.InUse):
+    message = _("Firewall %(firewall_id)s is still active")
+
+
+class FirewallPolicyNotFound(qexception.NotFound):
+    message = _("FirewallPolicy %(firewall_policy_id)s could not be found")
+
+
+class FirewallPolicyInUse(qexception.InUse):
+    message = _("FirewallPolicy %(firewall_policy_id)s is being used")
+
+
+class FirewallRuleNotFound(qexception.NotFound):
+    message = _("FirewallRule %(firewall_rule_id)s could not be found")
+
+
+class FirewallRuleInUse(qexception.InUse):
+    message = _("FirewallPolicy %(firewall_rule_id)s is being used")
+
+
 class FirewallRuleInvalidProtocol(qexception.InvalidInput):
     message = _("Firewall rule protocol %(protocol)s not supported. "
                 "Only protocol values %(values)s supported.")
@@ -149,10 +173,6 @@ RESOURCE_ATTRIBUTE_MAP = {
                  'is_visible': True, 'default': ''},
         'firewall_rules_list': {'allow_post': True, 'allow_put': True,
                                 'default': [], 'is_visible': True},
-        'shared': {'allow_post': False, 'allow_put': False,
-                   'default': True, 'convert_to': attr.convert_to_boolean,
-                   'is_visible': True, 'required_by_policy': True,
-                   'enforce_policy': True},
         'audited': {'allow_post': True, 'allow_put': True,
                     'default': False, 'convert_to': attr.convert_to_boolean,
                     'is_visible': True, 'required_by_policy': True,
@@ -176,6 +196,12 @@ RESOURCE_ATTRIBUTE_MAP = {
         'name': {'allow_post': True, 'allow_put': True,
                  'validate': {'type:string': None},
                  'is_visible': True, 'default': ''},
+        'admin_state_up': {'allow_post': True, 'allow_put': True,
+                           'default': True,
+                           'convert_to': attr.convert_to_boolean,
+                           'is_visible': True},
+        'status': {'allow_post': False, 'allow_put': False,
+                   'is_visible': True},
         'firewall_policy_id': {'allow_post': True, 'allow_put': True,
                                'validate': {'type:uuid': None},
                                'is_visible': True},

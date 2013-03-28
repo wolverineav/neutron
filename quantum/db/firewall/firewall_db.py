@@ -222,7 +222,7 @@ class Firewall_db_mixin(firewall.FirewallPluginBase):
 
             context.session.delete(fwp)
 
-    def get_firewall_policy(self, context, filters=None, fields=None):
+    def get_firewall_policy(self, context, id, fields=None):
         fwp = self._get_firewall_policy(context, id)
         return self._make_firewall_policy_dict(fwp, fields)
 

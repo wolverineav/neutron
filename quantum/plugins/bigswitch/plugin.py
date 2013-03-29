@@ -63,6 +63,7 @@ from quantum.db import api as db
 from quantum.db import db_base_plugin_v2
 from quantum.db import dhcp_rpc_base
 from quantum.db import l3_db
+from quantum.db.firewall import firewall_db
 from quantum.db.loadbalancer import loadbalancer_db
 from quantum.extensions import firewall
 from quantum.extensions import l3
@@ -286,7 +287,8 @@ class RpcProxy(dhcp_rpc_base.DhcpRpcCallbackMixin):
 
 class QuantumRestProxyV2(db_base_plugin_v2.QuantumDbPluginV2,
                          l3_db.L3_NAT_db_mixin,
-                         firewall.FirewallPluginBase,
+                         #firewall.FirewallPluginBase,
+                         firewall_db.Firewall_db_mixin,
                          loadbalancer_db.LoadBalancerPluginDb):
 
     supported_extension_aliases = ["router", "binding", "firewall", "lbaas"]
@@ -1253,52 +1255,86 @@ class QuantumRestProxyV2(db_base_plugin_v2.QuantumDbPluginV2,
                 'security-group' in self.supported_extension_aliases}
         return port
 
+    """
+    Firewall API implementation.
+    """
     def get_firewalls(self, context, filters=None, fields=None):
-        LOG.error(_("QuantumRestProxyV2: get_firewalls() called"))
-        return [{'id':'12343243', 'shared':True}]
+        LOG.debug(_("QuantumRestProxyV2: get_firewalls() called"))
+        return super(QuantumRestProxyV2, self).get_firewalls(context, filters,
+                                                             fields)
+        #return [{'id':'12343243', 'shared':True}]
 
     def get_firewall(self, context, id, fields=None):
-        pass
+        LOG.debug(_("QuantumRestProxyV2: get_firewall() called"))
+        return super(QuantumRestProxyV2, self).get_firewall(context, id,
+                                                            fields)
 
     def create_firewall(self, context, firewall):
         LOG.error(_("QuantumRestProxyV2: create_firewall() called"))
-        return {'id': '12343243'}
+        return super(QuantumRestProxyV2, self).create_firewall(context,
+                                                               firewall)
+        #return {'id':'12343243', 'shared':True}
 
     def update_firewall(self, context, id, firewall):
-        pass
+        LOG.error(_("QuantumRestProxyV2: update_firewall() called"))
+        return super(QuantumRestProxyV2, self).update_firewall(context, id,
+                                                               firewall)
 
     def delete_firewall(self, context, id):
-        pass
+        LOG.error(_("QuantumRestProxyV2: delete_firewall() called"))
+        return super(QuantumRestProxyV2, self).delete_firewall(context, id)
 
     def get_firewall_rules(self, context, filters=None, fields=None):
-        pass
+        LOG.debug(_("QuantumRestProxyV2: get_firewall_rules() called"))
+        return super(QuantumRestProxyV2, self).get_firewall_rules(context,
+                                                                  filters,
+                                                                  fields)
 
     def get_firewall_rule(self, context, id, fields=None):
-        pass
+        LOG.debug(_("QuantumRestProxyV2: get_firewall_rule() called"))
+        return super(QuantumRestProxyV2, self).get_firewall_rule(context, id,
+                                                                 fields)
 
     def create_firewall_rule(self, context, firewall_rule):
-        pass
+        LOG.error(_("QuantumRestProxyV2: create_firewall_rule() called"))
+        return super(QuantumRestProxyV2,
+                     self).create_firewall_rule(context, firewall_rule)
 
     def update_firewall_rule(self, context, id, firewall_rule):
-        pass
+        LOG.error(_("QuantumRestProxyV2: update_firewall_rule() called"))
+        return super(QuantumRestProxyV2,
+                     self).update_firewall_rule(context, id, firewall_rule)
 
     def delete_firewall_rule(self, context, id):
-        pass
-
-    def get_firewall_policy(self, context, filters=None, fields=None):
-        pass
+        LOG.error(_("QuantumRestProxyV2: delete_firewall_rule() called"))
+        return super(QuantumRestProxyV2, self).delete_firewall_rule(context,
+                                                                    id)
 
     def get_firewall_policies(self, context, filters=None, fields=None):
-        pass
+        LOG.debug(_("QuantumRestProxyV2: get_firewall_policies() called"))
+        return super(QuantumRestProxyV2, self).get_firewall_policies(context,
+                                                                     filters,
+                                                                     fields)
+
+    def get_firewall_policy(self, context, id, fields=None):
+        LOG.debug(_("QuantumRestProxyV2: get_firewall_policy() called"))
+        return super(QuantumRestProxyV2, self).get_firewall_policy(context, id,
+                                                                   fields)
 
     def create_firewall_policy(self, context, firewall_policy):
-        pass
+        LOG.error(_("QuantumRestProxyV2: create_firewall_policy() called"))
+        return super(QuantumRestProxyV2,
+                     self).create_firewall_policy(context, firewall_policy)
 
     def update_firewall_policy(self, context, id, firewall_policy):
-        pass
+        LOG.error(_("QuantumRestProxyV2: update_firewall_policy() called"))
+        return super(QuantumRestProxyV2,
+                     self).update_firewall_policy(context, id, firewall_policy)
 
     def delete_firewall_policy(self, context, id):
-        pass
+        LOG.error(_("QuantumRestProxyV2: delete_firewall_policy() called"))
+        return super(QuantumRestProxyV2, self).delete_firewall_policy(context,
+                                                                      id)
 
     """
     Loadbalancer API implementation.

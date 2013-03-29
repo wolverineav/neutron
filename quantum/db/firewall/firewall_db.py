@@ -127,7 +127,7 @@ class Firewall_db_mixin(firewall.FirewallPluginBase):
                'description': firewall_policy['description'],
                'tenant_id': firewall_policy['tenant_id'],
                'audited': firewall_policy['audited'],
-               'firewall_rules_list': firewall['firewall_rules']}
+               'firewall_rules_list': firewall_policy['firewall_rules']}
         return self._fields(res, fields)
 
     def _make_firewall_rule_dict(self, firewall_rule, fields=None):

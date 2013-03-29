@@ -132,7 +132,6 @@ class Firewall_db_mixin(firewall.FirewallPluginBase):
 
     def _make_firewall_rule_dict(self, firewall_rule, fields=None):
         res = {'id': firewall_rule['id'],
-               'name': firewall_rule['name'],
                'description': firewall_rule['description'],
                'tenant_id': firewall_rule['tenant_id'],
                'protocol': firewall_rule['protocol'],
@@ -143,7 +142,7 @@ class Firewall_db_mixin(firewall.FirewallPluginBase):
                'port_range_max': firewall_rule['port_range_max'],
                'application': firewall_rule['application'],
                'action': firewall_rule['action'],
-               'dynamic_attributes': firewall_rule['dyncamic_attributes']}
+               'dynamic_attributes': firewall_rule['dynamic_attributes']}
         return self._fields(res, fields)
 
     def create_firewall(self, context, fwall):
@@ -239,21 +238,20 @@ class Firewall_db_mixin(firewall.FirewallPluginBase):
         fwr = firewall_rule['firewall_rule']
         tenant_id = self._get_tenant_id_for_create(context, fwr)
         with context.session.begin(subtransactions=True):
-            fwr_db = FirewallPolicy(id=uuidutils.generate_uuid(),
-                                    tenant_id=tenant_id,
-                                    name=fwr['name'],
-                                    description=fwr['description'],
-                                    direction=fwr['direction'],
-                                    protocol=fwr['protocol'],
-                                    source_ip_address=fwr['source_ip_address'],
-                                    destination_ip_address=
-                                    fwr['destination_ip_address'],
-                                    port_range_min=fwr['port_range_min'],
-                                    port_range_max=fwr['port_range_max'],
-                                    application=fwr['application'],
-                                    action=fwr['action'],
-                                    dynamic_attributes=
-                                    fwr['dynamic_attributes'])
+            fwr_db = FirewallRule(id=uuidutils.generate_uuid(),
+                                  tenant_id=tenant_id,
+                                  description=fwr['description'],
+                                  direction=fwr['direction'],
+                                  protocol=fwr['protocol'],
+                                  source_ip_address=fwr['source_ip_address'],
+                                  destination_ip_address=
+                                  fwr['destination_ip_address'],
+                                  port_range_min=fwr['port_range_min'],
+                                  port_range_max=fwr['port_range_max'],
+                                  application=fwr['application'],
+                                  action=fwr['action'],
+                                  dynamic_attributes=
+                                  fwr['dynamic_attributes'])
             context.session.add(fwr_db)
         return self._make_firewall_rule_dict(fwr_db)
 

@@ -163,7 +163,7 @@ class Firewall_db_mixin(firewall.FirewallPluginBase):
     def update_firewall(self, context, id, fwall):
         fw = fwall['firewall']
         with context.session.begin(subtransactions=True):
-            firewall_db = self._get_router(context, id)
+            firewall_db = self._get_firewall(context, id)
             # Ensure we actually have something to update
             if fw.keys():
                 firewall_db.update(fw)

@@ -33,10 +33,6 @@ class VipNotFound(qexception.NotFound):
     message = _("Vip %(vip_id)s could not be found")
 
 
-class VipExists(qexception.QuantumException):
-    message = _("Another Vip already exists for pool %(pool_id)s")
-
-
 class PoolNotFound(qexception.NotFound):
     message = _("Pool %(pool_id)s could not be found")
 
@@ -64,6 +60,14 @@ class PoolStatsNotFound(qexception.NotFound):
 class ProtocolMismatch(qexception.BadRequest):
     message = _("Protocol %(vip_proto)s does not match "
                 "pool protocol %(pool_proto)s")
+
+
+class LoadbalancerNotFound(qexception.NotFound):
+    message = _("Loadbalancer %(loadbalancer_id)s could not be found")
+
+
+class LoadbalancerInUse(qexception.InUse):
+    message = _("Loadbalancer %(loadbalancer_id)s is still active")
 
 
 RESOURCE_ATTRIBUTE_MAP = {
@@ -241,7 +245,34 @@ RESOURCE_ATTRIBUTE_MAP = {
                            'is_visible': True},
         'status': {'allow_post': False, 'allow_put': False,
                    'is_visible': True}
-    }
+    },
+    'loadbalancers': {
+        'id': {'allow_post': False, 'allow_put': False,
+               'validate': {'type:uuid': None},
+               'is_visible': True,
+               'primary_key': True},
+        'tenant_id': {'allow_post': True, 'allow_put': False,
+                      'required_by_policy': True,
+                      'is_visible': True},
+        'description': {'allow_post': True, 'allow_put': True,
+                        'validate': {'type:string': None},
+                        'is_visible': True, 'default': ''},
+        'name': {'allow_post': True, 'allow_put': True,
+                 'validate': {'type:string': None},
+                 'is_visible': True, 'default': ''},
+        'admin_state_up': {'allow_post': True, 'allow_put': True,
+                           'default': True,
+                           'convert_to': attr.convert_to_boolean,
+                           'is_visible': True},
+        'status': {'allow_post': False, 'allow_put': False,
+                   'is_visible': True},
+        'vips_list': {'allow_post': True, 'allow_put': True,
+                      'default': [], 'is_visible': True},
+        'shared': {'allow_post': False, 'allow_put': False,
+                   'default': True, 'convert_to': attr.convert_to_boolean,
+                   'is_visible': True, 'required_by_policy': True,
+                   'enforce_policy': True},
+    },
 }
 
 SUB_RESOURCE_ATTRIBUTE_MAP = {
@@ -457,3 +488,24 @@ class LoadBalancerPluginBase(ServicePluginBase):
     @abc.abstractmethod
     def delete_health_monitor(self, context, id):
         pass
+
+    @abc.abstractmethod
+    def get_loadbalancers(self, context, filters=None, fields=None):
+        pass
+
+    @abc.abstractmethod
+    def get_loadbalancer(self, context, id, fields=None):
+        pass
+
+    @abc.abstractmethod
+    def create_loadbalancer(self, context, loadbalancer):
+        pass
+
+    @abc.abstractmethod
+    def update_loadbalancer(self, context, id, loadbalancer):
+        pass
+
+    @abc.abstractmethod
+    def delete_loadbalancer(self, context, id):
+        pass
+

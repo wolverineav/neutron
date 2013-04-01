@@ -17,7 +17,6 @@
 
 from oslo.config import cfg
 import sqlalchemy as sa
-from sqlalchemy import exc as sa_exc
 from sqlalchemy import orm
 from sqlalchemy.orm import exc
 from sqlalchemy.sql import expression as expr
@@ -79,6 +78,8 @@ class Vip(model_base.BASEV2, models_v2.HasId, models_v2.HasTenant):
     admin_state_up = sa.Column(sa.Boolean(), nullable=False)
     connection_limit = sa.Column(sa.Integer)
     port = orm.relationship(models_v2.Port)
+    loadbalancer_id = sa.Column(sa.String(36),
+                                sa.ForeignKey('loadbalancers.id'))
 
 
 class Member(model_base.BASEV2, models_v2.HasId, models_v2.HasTenant):
@@ -146,6 +147,15 @@ class PoolMonitorAssociation(model_base.BASEV2):
                            primary_key=True)
     monitor = orm.relationship("HealthMonitor",
                                backref="pools_poolmonitorassociations")
+
+
+class Loadbalancer(model_base.BASEV2, models_v2.HasId, models_v2.HasTenant):
+    """Represents a Loadbalancer resource"""
+    name = sa.Column(sa.String(255))
+    description = sa.Column(sa.String(1024))
+    status = sa.Column(sa.String(16))
+    admin_state_up = sa.Column(sa.Boolean)
+    vips = orm.relationship(Vip, backref='loadbalancers')
 
 
 class LoadBalancerPluginDb(LoadBalancerPluginBase):
@@ -391,11 +401,8 @@ class LoadBalancerPluginDb(LoadBalancerPluginBase):
                     vip_db['id'])
                 vip_db.session_persistence = s_p
 
-            try:
-                context.session.add(vip_db)
-                context.session.flush()
-            except sa_exc.IntegrityError:
-                raise loadbalancer.VipExists(pool_id=v['pool_id'])
+            context.session.add(vip_db)
+            context.session.flush()
 
             # create a port to reserve address for IPAM
             self._create_port_for_vip(
@@ -425,38 +432,31 @@ class LoadBalancerPluginDb(LoadBalancerPluginBase):
                 self._delete_session_persistence(context, id)
 
             if v:
-                try:
-                    # in case new pool already has a vip
-                    # update will raise integrity error at first query
-                    old_pool_id = vip_db['pool_id']
-                    vip_db.update(v)
-                    # If the pool_id is changed, we need to update
-                    # the associated pools
-                    if 'pool_id' in v:
-                        new_pool = self._get_resource(context, Pool,
-                                                      v['pool_id'])
-                        self.assert_modification_allowed(new_pool)
+                vip_db.update(v)
+                # If the pool_id is changed, we need to update
+                # the associated pools
+                if 'pool_id' in v:
+                    new_pool = self._get_resource(context, Pool, v['pool_id'])
+                    self.assert_modification_allowed(new_pool)
 
-                        # check that the pool matches the tenant_id
-                        if new_pool['tenant_id'] != vip_db['tenant_id']:
-                            raise q_exc.NotAuthorized()
-                        # validate that the pool has same protocol
-                        if new_pool['protocol'] != vip_db['protocol']:
-                            raise loadbalancer.ProtocolMismatch(
-                                vip_proto=vip_db['protocol'],
-                                pool_proto=new_pool['protocol'])
+                    # check that the pool matches the tenant_id
+                    if new_pool['tenant_id'] != vip_db['tenant_id']:
+                        raise q_exc.NotAuthorized()
+                    # validate that the pool has same protocol
+                    if new_pool['protocol'] != vip_db['protocol']:
+                        raise loadbalancer.ProtocolMismatch(
+                            vip_proto=vip_db['protocol'],
+                            pool_proto=new_pool['protocol'])
 
-                        if old_pool_id:
-                            old_pool = self._get_resource(
-                                context,
-                                Pool,
-                                old_pool_id
-                            )
-                            old_pool['vip_id'] = None
+                    if vip_db['pool_id']:
+                        old_pool = self._get_resource(
+                            context,
+                            Pool,
+                            vip_db['pool_id']
+                        )
+                        old_pool['vip_id'] = None
 
-                        new_pool['vip_id'] = vip_db['id']
-                except sa_exc.IntegrityError:
-                    raise loadbalancer.VipExists(pool_id=v['pool_id'])
+                    new_pool['vip_id'] = vip_db['id']
 
         return self._make_vip_dict(vip_db)
 
@@ -771,3 +771,67 @@ class LoadBalancerPluginDb(LoadBalancerPluginBase):
         return self._get_collection(context, HealthMonitor,
                                     self._make_health_monitor_dict,
                                     filters=filters, fields=fields)
+
+    def _get_loadbalancer(self, context, id):
+        try:
+            lb = self._get_by_id(context, Loadbalancer, id)
+        except exc.NoResultFound:
+            raise loadbalancer.LoadbalancerNotFound(loadbalancer_id=id)
+        except exc.MultipleResultsFound:
+            LOG.error(_('Multiple loadbalancers match for %s'), id)
+            raise loadbalancer.LoadbalancerNotFound(loadbalancer_id=id)
+        return lb
+
+    def _make_loadbalancer_dict(self, lb, fields=None):
+        res = {'id': lb['id'],
+               'name': lb['name'],
+               'description': lb['description'],
+               'tenant_id': lb['tenant_id'],
+               'admin_state_up': lb['admin_state_up'],
+               'status': lb['status'],
+               'vips_list': lb['vips']}
+        return self._fields(res, fields)
+
+    def create_loadbalancer(self, context, lbalancer):
+        lb = lbalancer['loadbalancer']
+        tenant_id = self._get_tenant_id_for_create(context, lb)
+        with context.session.begin(subtransactions=True):
+            loadbalancer_db = Loadbalancer(id=uuidutils.generate_uuid(),
+                                           tenant_id=tenant_id,
+                                           name=lb['name'],
+                                           description=lb['description'],
+                                           vips=lb['vips_list'],
+                                           admin_state_up=lb['admin_state_up'],
+                                           status="ACTIVE")
+            context.session.add(loadbalancer_db)
+        return self._make_loadbalancer_dict(loadbalancer_db)
+
+    def update_loadbalancer(self, context, id, lbalancer):
+        lb = lbalancer['loadbalancer']
+        with context.session.begin(subtransactions=True):
+            loadbalancer_db = self._get_loadbalancer(context, id)
+            # Ensure we actually have something to update
+            if lb.keys():
+                loadbalancer_db.update(lb)
+        return self._make_loadbalancer_dict(loadbalancer_db)
+
+    def delete_loadbalancer(self, context, id):
+        with context.session.begin(subtransactions=True):
+            lb = self._get_loadbalancer(context, id)
+
+            # TODO (Sumit) Ensure that the loadbalancer is not active
+
+            context.session.delete(lb)
+
+    def get_loadbalancer(self, context, id, fields=None):
+        lb = self._get_loadbalancer(context, id)
+        return self._make_loadbalancer_dict(lb, fields)
+
+    def get_loadbalancers(self, context, filters=None, fields=None):
+        return self._get_collection(context, Loadbalancer,
+                                    self._make_loadbalancer_dict,
+                                    filters=filters, fields=fields)
+
+    def get_loadbalancers_count(self, context, filters=None):
+        return self._get_collection_count(context, Loadbalancer,
+                                          filters=filters)

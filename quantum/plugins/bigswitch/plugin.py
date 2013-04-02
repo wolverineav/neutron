@@ -110,7 +110,7 @@ ROUTER_RESOURCE_PATH = "/tenants/%s/routers"
 ROUTER_INTF_OP_PATH = "/tenants/%s/routers/%s/interfaces"
 VIP_RESOURCE_PATH = "/tenants/%s/vips"
 POOL_RESOURCE_PATH = "/tenants/%s/pools"
-MEMBER_RESOURCE_PATH = "/tenants/%s/members"
+MEMBER_RESOURCE_PATH = "/tenants/%s/pools/%s/members"
 HMONITOR_RESOURCE_PATH = "/tenants/%s/health_monitors"
 LOADBALANCER_RESOURCE_PATH = "/tenants/%s/loadbalancers"
 FIREWALL_RESOURCE_PATH = "/tenants/%s/firewalls"
@@ -123,7 +123,7 @@ ROUTERS_PATH = "/tenants/%s/routers/%s"
 ROUTER_INTF_PATH = "/tenants/%s/routers/%s/interfaces/%s"
 VIPS_PATH = "/tenants/%s/vips/%s"
 POOLS_PATH = "/tenants/%s/pools/%s"
-MEMBERS_PATH = "/tenants/%s/members/%s"
+MEMBERS_PATH = "/tenants/%s/pools/%s/members/%s"
 HMONITORS_PATH = "/tenants/%s/health_monitors/%s"
 ASSC_POOL_HMONITOR_PATH = "/tenants/%s/pools/%s/health_monitors"
 DISASSC_POOL_HMONITOR_PATH = "/tenants/%s/pools/%s/health_monitors/%s"
@@ -139,6 +139,7 @@ MEMBER = "member"
 HEALTHMONITOR = "health_monitor"
 FIREWALL_RULE = "firewall_rule"
 FIREWALL_POLICY = "firewall_policy"
+MEMBER_ID = "%s-%s"
 SUCCESS_CODES = range(200, 207)
 FAILURE_CODES = [0, 301, 302, 303, 400, 401, 403, 404, 500, 501, 502, 503,
                  504, 505]
@@ -1292,10 +1293,10 @@ class QuantumRestProxyV2(db_base_plugin_v2.QuantumDbPluginV2,
         try:
             resource_uri = controller_uri % new_resource['tenant_id']
             data = {
-                "resource_name": new_resource
+                resource_name: new_resource
                 #TODO (Sumit): Add vendor
             }
-            ret = self.servers.post(resource, data)
+            ret = self.servers.post(resource_uri, data)
             if not self.servers.action_success(ret):
                 raise RemoteRestError(ret[2])
         except RemoteRestError as e:
@@ -1323,7 +1324,7 @@ class QuantumRestProxyV2(db_base_plugin_v2.QuantumDbPluginV2,
         try:
             resource_uri = controller_uri % (orig_resource["tenant_id"], id)
             data = {resource_name: updated_resource}
-            ret = self.servers.put(resource, data)
+            ret = self.servers.put(resource_uri, data)
             if not self.servers.action_success(ret):
                 raise RemoteRestError(ret[2])
         except RemoteRestError as e:
@@ -1344,7 +1345,7 @@ class QuantumRestProxyV2(db_base_plugin_v2.QuantumDbPluginV2,
         # delete from network controller, remote error on delete is ignored
         try:
             resource_uri = controller_uri % (orig_resource["tenant_id"], id)
-            ret = self.servers.delete(resource)
+            ret = self.servers.delete(resource_uri)
             if not self.servers.action_success(ret):
                 raise RemoteRestError(ret[2])
             delete_db = getattr(super(QuantumRestProxyV2, self),
@@ -1547,15 +1548,25 @@ class QuantumRestProxyV2(db_base_plugin_v2.QuantumDbPluginV2,
                         "pool: %s"), e.message)
             raise
 
+    def _map_member_id(self, member):
+        new_id = MEMBER_ID % (member['address'], member['protocol_port'])
+        return new_id
+
+    def _get_mapped_member(self, member):
+        mapped_member = copy.copy(member)
+        mapped_member['id'] = self._map_member_id(mapped_member)
+        return mapped_member
+
     def create_member(self, context, member):
         LOG.debug(_("QuantumRestProxyV2: LB create_member() called"))
         new_member = super(QuantumRestProxyV2, self).create_member(context,
                                                                    member)
         # create member on network controller
         try:
-            resource = MEMBER_RESOURCE_PATH % new_member['tenant_id']
+            resource = MEMBER_RESOURCE_PATH % (new_member['tenant_id'],
+                                               new_member['pool_id'])
             data = {
-                "member": new_member
+                "member": self._get_mapped_member(new_member)
             }
             ret = self.servers.post(resource, data)
             if not self.servers.action_success(ret):
@@ -1577,8 +1588,13 @@ class QuantumRestProxyV2(db_base_plugin_v2.QuantumDbPluginV2,
 
         # update on networl ctrl
         try:
-            resource = MEMBERS_PATH % (orig_member["tenant_id"], id)
-            data = {"member": new_member}
+            mapped_member = self._get_mapped_member(new_member)
+            resource = MEMBERS_PATH % (mapped_member['tenant_id'], 
+                                       mapped_member['pool_id'],
+                                       mapped_member['id'])
+            data = {
+                "member": mapped_member
+            }
             ret = self.servers.put(resource, data)
             if not self.servers.action_success(ret):
                 raise RemoteRestError(ret[2])
@@ -1598,7 +1614,10 @@ class QuantumRestProxyV2(db_base_plugin_v2.QuantumDbPluginV2,
         member = self.get_member(context, id)
         # delete from network ctrl. Remote error on delete is ignored
         try:
-            resource = MEMBERS_PATH % (member['tenant_id'], id)
+            mapped_member = self._get_mapped_member(member)
+            resource = MEMBERS_PATH % (mapped_member['tenant_id'], 
+                                       mapped_member['pool_id'],
+                                       mapped_member['id'])
             ret = self.servers.delete(resource)
             if not self.servers.action_success(ret):
                 raise RemoteRestError(ret[2])

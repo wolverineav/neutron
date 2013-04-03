@@ -1739,10 +1739,10 @@ class QuantumRestProxyV2(db_base_plugin_v2.QuantumDbPluginV2,
                         "health_monitor pool association: %s"), e.message)
             raise
 
-    def create_loadbalancer(self, context, lb):
+    def create_loadbalancer(self, context, loadbalancer):
         LOG.debug(_("QuantumRestProxyV2: LB create_loadbalancer() called"))
-        new_lb = super(QuantumRestProxyV2, self).create_loadbalancer(context,
-                                                                     lb)
+        new_lb = super(QuantumRestProxyV2,
+                       self).create_loadbalancer(context, loadbalancer)
         # create loadbalancer on network controller
         try:
             resource = LOADBALANCER_RESOURCE_PATH % new_lb['tenant_id']
@@ -1762,11 +1762,11 @@ class QuantumRestProxyV2(db_base_plugin_v2.QuantumDbPluginV2,
             raise
         return new_lb
 
-    def update_loadbalancer(self, context, id, lb):
+    def update_loadbalancer(self, context, id, loadbalancer):
         LOG.debug(_("QuantumRestProxyV2: LB update_loadbalancer() called"))
         orig_lb = super(QuantumRestProxyV2, self).get_loadbalancer(context, id)
         new_lb = super(QuantumRestProxyV2,
-                       self).update_loadbalancer(context, id, lb)
+                       self).update_loadbalancer(context, id, loadbalancer)
 
         # update on networl ctrl
         try:

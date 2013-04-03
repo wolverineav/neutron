@@ -79,7 +79,7 @@ class Vip(model_base.BASEV2, models_v2.HasId, models_v2.HasTenant):
     connection_limit = sa.Column(sa.Integer)
     port = orm.relationship(models_v2.Port)
     loadbalancer_id = sa.Column(sa.String(36),
-                                sa.ForeignKey('loadbalancers.id'))
+                                sa.ForeignKey('loadbalancer.id'))
 
 
 class Member(model_base.BASEV2, models_v2.HasId, models_v2.HasTenant):
@@ -151,11 +151,12 @@ class PoolMonitorAssociation(model_base.BASEV2):
 
 class Loadbalancer(model_base.BASEV2, models_v2.HasId, models_v2.HasTenant):
     """Represents a Loadbalancer resource"""
+    __tablename__ = 'loadbalancer'
     name = sa.Column(sa.String(255))
     description = sa.Column(sa.String(1024))
     status = sa.Column(sa.String(16))
     admin_state_up = sa.Column(sa.Boolean)
-    vips = orm.relationship(Vip, backref='loadbalancers')
+    vips = orm.relationship("Vip", backref='loadbalancer')
 
 
 class LoadBalancerPluginDb(LoadBalancerPluginBase):
@@ -272,6 +273,7 @@ class LoadBalancerPluginDb(LoadBalancerPluginBase):
                'protocol_port': vip['protocol_port'],
                'protocol': vip['protocol'],
                'pool_id': vip['pool_id'],
+               'loadbalancer_id': vip['loadbalancer_id'],
                'connection_limit': vip['connection_limit'],
                'admin_state_up': vip['admin_state_up'],
                'status': vip['status']}
@@ -389,6 +391,7 @@ class LoadBalancerPluginDb(LoadBalancerPluginBase):
                          protocol_port=v['protocol_port'],
                          protocol=v['protocol'],
                          pool_id=v['pool_id'],
+                         loadbalancer_id=v['loadbalancer_id'],
                          connection_limit=v['connection_limit'],
                          admin_state_up=v['admin_state_up'],
                          status=constants.PENDING_CREATE)
@@ -783,31 +786,49 @@ class LoadBalancerPluginDb(LoadBalancerPluginBase):
         return lb
 
     def _make_loadbalancer_dict(self, lb, fields=None):
+        vips_list = []
+        for vip in lb['vips']:
+            vips_list.append(vip['id'])
         res = {'id': lb['id'],
                'name': lb['name'],
                'description': lb['description'],
                'tenant_id': lb['tenant_id'],
                'admin_state_up': lb['admin_state_up'],
                'status': lb['status'],
-               'vips_list': lb['vips']}
+               'vips_list': vips_list}
         return self._fields(res, fields)
 
-    def create_loadbalancer(self, context, lbalancer):
-        lb = lbalancer['loadbalancer']
+    def create_loadbalancer(self, context, loadbalancer):
+        lb = loadbalancer['loadbalancer']
         tenant_id = self._get_tenant_id_for_create(context, lb)
         with context.session.begin(subtransactions=True):
+            for vip_id in  lb['vips_list']:
+                try:
+                    qry = context.session.query(Vip)
+                    vip = qry.filter_by(id=vip_id).one()
+                except exc.NoResultFound:
+                    raise loadbalancer.VipNotFound(vip_id=vip_id)
             loadbalancer_db = Loadbalancer(id=uuidutils.generate_uuid(),
                                            tenant_id=tenant_id,
                                            name=lb['name'],
                                            description=lb['description'],
-                                           vips=lb['vips_list'],
                                            admin_state_up=lb['admin_state_up'],
                                            status="ACTIVE")
             context.session.add(loadbalancer_db)
+            for vip_id in  lb['vips_list']:
+                vip = self._get_resource(context, Vip, vip_id)
+                self.assert_modification_allowed(vip)
+                # check that the pool matches the tenant_id
+                if vip['tenant_id'] != tenant_id:
+                    raise q_exc.NotAuthorized()
+                vip.update({'loadbalancer_id': loadbalancer_db['id']})
+
+        loadbalancer_db = self._get_loadbalancer(context,
+                                                 loadbalancer_db['id'])
         return self._make_loadbalancer_dict(loadbalancer_db)
 
-    def update_loadbalancer(self, context, id, lbalancer):
-        lb = lbalancer['loadbalancer']
+    def update_loadbalancer(self, context, id, loadbalancer):
+        lb = loadbalancer['loadbalancer']
         with context.session.begin(subtransactions=True):
             loadbalancer_db = self._get_loadbalancer(context, id)
             # Ensure we actually have something to update

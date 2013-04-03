@@ -831,6 +831,15 @@ class LoadBalancerPluginDb(LoadBalancerPluginBase):
         lb = loadbalancer['loadbalancer']
         with context.session.begin(subtransactions=True):
             loadbalancer_db = self._get_loadbalancer(context, id)
+            for vip_id in  lb['vips_list']:
+                vip = self._get_resource(context, Vip, vip_id)
+                self.assert_modification_allowed(vip)
+                # check that the pool matches the tenant_id
+                if vip['tenant_id'] != loadbalancer_db['tenant_id']:
+                    raise q_exc.NotAuthorized()
+                vip.update({'loadbalancer_id': loadbalancer_db['id']})
+
+            del lb['vips_list']
             # Ensure we actually have something to update
             if lb.keys():
                 loadbalancer_db.update(lb)

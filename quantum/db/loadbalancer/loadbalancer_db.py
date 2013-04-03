@@ -391,7 +391,6 @@ class LoadBalancerPluginDb(LoadBalancerPluginBase):
                          protocol_port=v['protocol_port'],
                          protocol=v['protocol'],
                          pool_id=v['pool_id'],
-                         loadbalancer_id=v['loadbalancer_id'],
                          connection_limit=v['connection_limit'],
                          admin_state_up=v['admin_state_up'],
                          status=constants.PENDING_CREATE)

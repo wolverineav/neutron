@@ -97,6 +97,8 @@ restproxy_opts = [
     cfg.BoolOpt('add_meta_server_route', default=True,
                 help=_("Flag to decide if a route to the metadata server "
                        "should be injected into the VM")),
+    cfg.StrOpt('firewall_policies', default='{}',
+               help=_("Firewall policies and rules to load from config")),
 ]
 
 
@@ -364,7 +366,78 @@ class QuantumRestProxyV2(db_base_plugin_v2.QuantumDbPluginV2,
             self._send_all_data()
 
         self._dhcp_agent_notifier = dhcp_rpc_agent_api.DhcpAgentNotifyAPI()
+
+        # We run the firewall policies from the config file
+        self._firewall_dict = json.loads(cfg.CONF.RESTPROXY.firewall_policies)
+        LOG.error(_("QuantumRestProxyV2: firewall dict %s"),
+                     self._firewall_dict)
+        self._init_firewall_policies(self._firewall_dict)
         LOG.debug(_("QuantumRestProxyV2: initialization done"))
+
+    def _get_default_fwrule_dict(self, tenant_id):
+        return {'description': '',
+                'direction': 'ingress',
+                'tenant_id': tenant_id,
+                'protocol': None,
+                'source_ip_address': '',
+                'destination_ip_address': '',
+                'port_range_min': 0,
+                'port_range_max': 0,
+                'application': '',
+                'action': 'deny',
+                'dynamic_attributes': ''}
+
+    def _get_default_fwpolicy_dict(self, tenant_id):
+        return {'name': '',
+                'description': '',
+                'tenant_id': tenant_id,
+                'audited': True,
+                'firewall_rules_list': []}
+
+
+    def _init_firewall_policies(self, firewall_dict):
+        context = qcontext.get_admin_context()
+        tenant_id = context.tenant_id
+        for fwp_name, fwp in firewall_dict.iteritems():
+            fw_policy = self._get_default_fwpolicy_dict(tenant_id)
+            fw_policy['name'] = fwp_name
+            for k1, v1 in fwp.iteritems():
+                if k1 == 'firewall_rules_list':
+                    rules_list = []
+                    for fwr_desc, fwr in v1.iteritems():
+                        fw_rule = self._get_default_fwrule_dict(tenant_id)
+                        fw_rule['description'] = fwr_desc
+                        for k2, v2 in fwr.iteritems():
+                            fw_rule[k2] = v2 
+                        # TODO (Sumit): check if shared attr needs to be set
+                        # for rule
+                        rule = {FIREWALL_RULE: fw_rule}
+                        filter = {'description': [fwr_desc]}
+                        # note we are assuming that if the rule is present
+                        # there is only one
+                        orig_rules = self.get_firewall_rules(context,
+                                                            filters=filter)
+                        if orig_rules and orig_rules[0] and orig_rules[0]['id']:
+                            rule_id = orig_rules[0]['id']
+                            self.update_firewall_rule(context, rule_id,
+                                                      rule)
+                        else:
+                            new_rule = self.create_firewall_rule(context, rule)
+                            rule_id = new_rule['id']
+                        rules_list.append(rule_id)
+                    fw_policy['firewall_rules_list'] = rules_list
+                else:
+                    fw_policy[k1] = v1
+            # TODO (Sumit): check if shared attr needs to be set for policy
+            policy = {FIREWALL_POLICY: fw_policy}
+            filter = {'name': [fwp_name]}
+            # note we are assuming if the policy is present there is only one
+            orig_policy = self.get_firewall_policies(context, filters=filter)
+            if orig_policy and orig_policy[0] and orig_policy[0]['id']:
+                self.update_firewall_policy(context, orig_policy[0]['id'],
+                                            policy)
+            else:
+                self.create_firewall_policy(context, policy)
 
     def get_plugin_services(self):
         supported_svcs = {constants.FIREWALL:'Firewall service plugin',
@@ -1285,7 +1358,8 @@ class QuantumRestProxyV2(db_base_plugin_v2.QuantumDbPluginV2,
     def _create_resource(self, context, resource, resource_name,
                          controller_uri):
         """Creates a resource in the DB and in the backend controller"""
-        LOG.error(_("QuantumRestProxyV2: create_%s() called"), resource_name)
+        LOG.error(_("QuantumRestProxyV2: create_%s() called for %s"),
+                    resource_name, resource)
         create_db = getattr(super(QuantumRestProxyV2, self),
                               'create_' + resource_name)
         new_resource = create_db(context, resource)

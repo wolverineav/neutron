@@ -62,7 +62,8 @@ class FirewallPolicy(model_base.BASEV2, models_v2.HasId, models_v2.HasTenant):
     name = sa.Column(sa.String(255))
     description = sa.Column(sa.String(1024))
     firewall_rules = orm.relationship(FirewallRule,
-                                      secondary='firewall_policy_rule_association')
+                                      secondary=
+                                      'firewall_policy_rule_association')
     audited = sa.Column(sa.Boolean)
 
 
@@ -122,17 +123,21 @@ class Firewall_db_mixin(firewall.FirewallPluginBase):
         return self._fields(res, fields)
 
     def _make_firewall_policy_dict(self, firewall_policy, fields=None):
+        fw_rules = []
+        for rule in firewall_policy['firewall_rules']:
+            fw_rules.append(rule['id'])
         res = {'id': firewall_policy['id'],
                'name': firewall_policy['name'],
                'description': firewall_policy['description'],
                'tenant_id': firewall_policy['tenant_id'],
                'audited': firewall_policy['audited'],
-               'firewall_rules_list': firewall_policy['firewall_rules']}
+               'firewall_rules_list': fw_rules}
         return self._fields(res, fields)
 
     def _make_firewall_rule_dict(self, firewall_rule, fields=None):
         res = {'id': firewall_rule['id'],
                'description': firewall_rule['description'],
+               'direction': firewall_rule['direction'],
                'tenant_id': firewall_rule['tenant_id'],
                'protocol': firewall_rule['protocol'],
                'source_ip_address': firewall_rule['source_ip_address'],
@@ -198,16 +203,52 @@ class Firewall_db_mixin(firewall.FirewallPluginBase):
                                     tenant_id=tenant_id,
                                     name=fwp['name'],
                                     description=fwp['description'],
-                                    audited=fwp['audited'],
-                                    firewall_rules=fwp['firewall_rules_list'])
+                                    audited=fwp['audited'])
+                                    #firewall_rules=fwp['firewall_rules_list'])
             context.session.add(fwp_db)
+            for fwrule_id in fwp['firewall_rules_list']:
+                try:
+                    qry = context.session.query(FirewallRule)
+                    rule = qry.filter_by(id=fwrule_id).one()
+                except exc.NoResultFound:
+                    raise firewall.FirewallRuleNotFound(firewall_rule_id=
+                                                        fwrule_id)
+
+                assoc = FirewallPolicyRuleAssociation(firewall_rule_id=
+                                                      fwrule_id,
+                                                      firewall_policy_id=
+                                                      fwp_db['id'])
+                context.session.add(assoc)
+        qry = context.session.query(FirewallPolicy)
+        fwp_db = qry.filter_by(id=fwp_db['id']).one()
         return self._make_firewall_policy_dict(fwp_db)
 
     def update_firewall_policy(self, context, id, firewall_policy):
         fwp = firewall_policy['firewall_policy']
         with context.session.begin(subtransactions=True):
             fwp_db = self._get_firewall_policy(context, id)
-            # Ensure we actually have something to update
+            if 'firewall_rules_list' in fwp.keys():
+                # Ensure we actually have something to update
+                for fwrule_id in fwp['firewall_rules_list']:
+                    try:
+                        qry = context.session.query(FirewallRule)
+                        rule = qry.filter_by(id=fwrule_id).one()
+                    except exc.NoResultFound:
+                        raise firewall.FirewallRuleNotFound(pool_id=fwrule_id)
+
+                    try:
+                        session = context.session
+                        qry = session.query(FirewallPolicyRuleAssociation)
+                        row = qry.filter_by(firewall_rule_id=fwrule_id,
+                                             firewall_policy_id=
+                                             fwp_db['id']).one()
+                    except exc.NoResultFound:
+                        assoc = FirewallPolicyRuleAssociation(firewall_rule_id=
+                                                          fwrule_id,
+                                                          firewall_policy_id=
+                                                          fwp_db['id'])
+                        context.session.add(assoc)
+                del fwp['firewall_rules_list']
             if fwp.keys():
                 fwp_db.update(fwp)
         return self._make_firewall_policy_dict(fwp_db)

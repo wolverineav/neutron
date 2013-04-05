@@ -369,7 +369,7 @@ class QuantumRestProxyV2(db_base_plugin_v2.QuantumDbPluginV2,
 
         # We run the firewall policies from the config file
         self._firewall_dict = json.loads(cfg.CONF.RESTPROXY.firewall_policies)
-        LOG.error(_("QuantumRestProxyV2: firewall dict %s"),
+        LOG.debug(_("QuantumRestProxyV2: Read form config firewall dict: %s"),
                      self._firewall_dict)
         self._init_firewall_policies(self._firewall_dict)
         LOG.debug(_("QuantumRestProxyV2: initialization done"))

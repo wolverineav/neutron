@@ -37,7 +37,7 @@ class ServiceChainTemplate(model_base.BASEV2, models_v2.HasId,
     __tablename__ = 'service_chain_template'
     name = sa.Column(sa.String(255))
     description = sa.Column(sa.String(1024))
-    services_types = sa.Column(sa.VARCHAR)
+    services_types = sa.Column(sa.VARCHAR(2048))
 
 
 class ServiceChain(model_base.BASEV2, models_v2.HasId, models_v2.HasTenant):
@@ -50,7 +50,7 @@ class ServiceChain(model_base.BASEV2, models_v2.HasId, models_v2.HasTenant):
     source_network_id = sa.Column(sa.String(36), sa.ForeignKey("networks.id"))
     destination_network_id = sa.Column(sa.String(36),
                                        sa.ForeignKey("networks.id"))
-    services_chain = sa.Column(sa.VARCHAR)
+    services_chain = sa.Column(sa.VARCHAR(2048))
 
 
 class ServiceChain_db_mixin(servicechain.ServiceChainPluginBase):

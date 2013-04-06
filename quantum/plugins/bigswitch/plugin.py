@@ -65,9 +65,11 @@ from quantum.db import dhcp_rpc_base
 from quantum.db import l3_db
 from quantum.db.firewall import firewall_db
 from quantum.db.loadbalancer import loadbalancer_db
+from quantum.db import servicechain_db
 from quantum.extensions import firewall
 from quantum.extensions import l3
 from quantum.extensions import portbindings
+from quantum.extensions import servicechain
 from quantum.openstack.common import lockutils
 from quantum.openstack.common import log as logging
 from quantum.openstack.common import rpc
@@ -99,6 +101,8 @@ restproxy_opts = [
                        "should be injected into the VM")),
     cfg.StrOpt('firewall_policies', default='{}',
                help=_("Firewall policies and rules to load from config")),
+    cfg.StrOpt('service_chain_templates', default='{}',
+               help=_("Service chain tempaltes to load from config")),
 ]
 
 
@@ -118,6 +122,7 @@ LOADBALANCER_RESOURCE_PATH = "/tenants/%s/loadbalancers"
 FIREWALL_RESOURCE_PATH = "/tenants/%s/firewalls"
 FIREWALL_RULE_RESOURCE_PATH = "/tenants/%s/firewall_rules"
 FIREWALL_POLICY_RESOURCE_PATH = "/tenants/%s/firewall_policies"
+SERVICE_CHAIN_RESOURCE_PATH = "/tenants/%s/service_chains"
 NETWORKS_PATH = "/tenants/%s/networks/%s"
 PORTS_PATH = "/tenants/%s/networks/%s/ports/%s"
 ATTACHMENT_PATH = "/tenants/%s/networks/%s/ports/%s/attachment"
@@ -133,6 +138,7 @@ LOADBALANCERS_PATH = "/tenants/%s/loadbalancers/%s"
 FIREWALLS_PATH = "/tenants/%s/firewalls/%s"
 FIREWALL_RULES_PATH = "/tenants/%s/firewall_rules/%s"
 FIREWALL_POLICIES_PATH = "/tenants/%s/firewall_policies/%s"
+SERVICE_CHAINS_PATH = "/tenants/%s/service_chains/%s"
 LOADBALANCER = "loadbalancer"
 FIREWALL = "firewall"
 VIP = "vip"
@@ -141,6 +147,7 @@ MEMBER = "member"
 HEALTHMONITOR = "health_monitor"
 FIREWALL_RULE = "firewall_rule"
 FIREWALL_POLICY = "firewall_policy"
+SERVICE_CHAIN = "service_chain"
 MEMBER_ID = "%s-%s"
 SUCCESS_CODES = range(200, 207)
 FAILURE_CODES = [0, 301, 302, 303, 400, 401, 403, 404, 500, 501, 502, 503,
@@ -318,9 +325,11 @@ class QuantumRestProxyV2(db_base_plugin_v2.QuantumDbPluginV2,
                          l3_db.L3_NAT_db_mixin,
                          #firewall.FirewallPluginBase,
                          firewall_db.Firewall_db_mixin,
-                         loadbalancer_db.LoadBalancerPluginDb):
+                         loadbalancer_db.LoadBalancerPluginDb,
+                         servicechain_db.ServiceChain_db_mixin):
 
-    supported_extension_aliases = ["router", "binding", "firewall", "lbaas"]
+    supported_extension_aliases = ["router", "binding", "firewall", "lbaas",
+                                   "service_chains"]
 
     binding_view = "extension:port_binding:view"
     binding_set = "extension:port_binding:set"
@@ -1851,7 +1860,7 @@ class QuantumRestProxyV2(db_base_plugin_v2.QuantumDbPluginV2,
                 raise RemoteRestError(ret[2])
 
         except RemoteRestError as e:
-            LOG.error(_("QuantumRestProxyV2: Unable to update remote loadbalancer: "
+            LOG.error(_("QuantumRestProxyV2: Unable to update remote lb: "
                         "%s"), e.message)
             # reset to original state
             super(QuantumRestProxyV2,
@@ -1876,3 +1885,56 @@ class QuantumRestProxyV2(db_base_plugin_v2.QuantumDbPluginV2,
             LOG.error(_("QuantumRestProxyV2: Unable to delete remote "
                         "loadbalancer: %s"), e.message)
             raise
+
+    """
+    Service Chain API implementation.
+    """
+    def get_service_chains(self, context, filters=None, fields=None):
+        LOG.debug(_("QuantumRestProxyV2: get_service_chains() called"))
+        return super(QuantumRestProxyV2, self).get_service_chains(context,
+                                                                  filters,
+                                                                  fields)
+
+    def get_service_chain(self, context, id, fields=None):
+        LOG.debug(_("QuantumRestProxyV2: get_service_chain() called"))
+        return super(QuantumRestProxyV2, self).get_service_chain(context, id,
+                                                                 fields)
+
+    def create_service_chain(self, context, service_chain):
+        return self._create_resource(context, service_chain, SERVICE_CHAIN,
+                                     SERVICE_CHAIN_RESOURCE_PATH)
+
+    def update_service_chain(self, context, id, service_chain):
+        return self._update_resource(context, id, service_chain, SERVICE_CHAIN,
+                                     SERVICE_CHAINS_PATH)
+
+    def delete_service_chain(self, context, id):
+        return self._delete_resource(context, id, SERVICE_CHAIN,
+                                     SERVICE_CHAINS_PATH)
+
+    def get_service_chain_templates(self, context, filters=None, fields=None):
+        LOG.debug(_("QuantumRestProxyV2: get_service_chain_templates() called"))
+        return super(QuantumRestProxyV2,
+                     self).get_service_chain_templates(context, filters, fields)
+
+    def get_service_chain_template(self, context, id, fields=None):
+        LOG.debug(_("QuantumRestProxyV2: get_service_chain_template() called"))
+        return super(QuantumRestProxyV2,
+                     self).get_service_chain_template(context, id, fields)
+
+    def create_service_chain_template(self, context, service_chain_template):
+        LOG.debug(_("create_service_chain_template() called"))
+        return super(QuantumRestProxyV2,
+                     self).create_service_chain_template(context,
+                                                         service_chain_template)
+
+    def update_service_chain_template(self, context, id,
+                                      service_chain_template):
+        LOG.debug(_("update_service_chain_template() called"))
+        return super(QuantumRestProxyV2,
+                     self).update_service_chain_template(context, id,
+                                                         service_chain_template)
+
+    def delete_service_chain_template(self, context, id):
+        return super(QuantumRestProxyV2,
+                     self).delete_service_chain_template(context, id)

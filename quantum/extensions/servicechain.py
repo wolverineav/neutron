@@ -142,7 +142,7 @@ class ServiceChain(extensions.ExtensionDescriptor):
 
     @classmethod
     def get_alias(cls):
-        return "service_chain"
+        return "service_chains"
 
     @classmethod
     def get_description(cls):

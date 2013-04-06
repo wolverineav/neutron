@@ -133,8 +133,8 @@ RESOURCE_ATTRIBUTE_MAP = {
 }
 
 
-class ServiceChain(extensions.ExtensionDescriptor):
-    """ Security chain extension"""
+class Servicechain(extensions.ExtensionDescriptor):
+    """ Service chain extension"""
 
     @classmethod
     def get_name(cls):
@@ -183,7 +183,7 @@ class ServiceChain(extensions.ExtensionDescriptor):
         return ServiceChainPluginBase
 
     def update_attributes_map(self, attributes):
-        super(ServiceChain, self).update_attributes_map(
+        super(Servicechain, self).update_attributes_map(
             attributes, extension_attrs_map=RESOURCE_ATTRIBUTE_MAP)
 
     def get_extended_resources(self, version):

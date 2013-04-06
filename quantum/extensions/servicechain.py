@@ -48,6 +48,11 @@ class ServiceChainInUse(qexception.InUse):
     message = _("Service chain %(service_chain_id)s is still active")
 
 
+class ServiceChainNoNetworks(qexception.InvalidInput):
+    message = _("Either source or destination network should be specified for "
+                "service chain")
+
+
 class ServiceChainTemplateNotFound(qexception.NotFound):
     message = _("Service Chain Template %(template_id)s could not be found")
 
@@ -115,6 +120,12 @@ RESOURCE_ATTRIBUTE_MAP = {
         'template_id': {'allow_post': True, 'allow_put': True,
                         'validate': {'type:uuid': None},
                         'is_visible': True},
+        'source_network_id': {'allow_post': True, 'allow_put': True,
+                              'validate': {'type:uuid': None},
+                              'is_visible': True},
+        'destination_network_id': {'allow_post': True, 'allow_put': True,
+                                   'validate': {'type:uuid': None},
+                                   'is_visible': True},
         'services_list': {'allow_post': True, 'allow_put': True,
                           'is_visible': True,
                           'convert_to': _convert_to_uuid_list},

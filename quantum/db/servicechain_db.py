@@ -34,19 +34,17 @@ LOG = logging.getLogger(__name__)
 class ServiceChainTemplate(model_base.BASEV2, models_v2.HasId,
                            models_v2.HasTenant):
     """Represents a Service Chain Template resource"""
-    __tablename__ = 'service_chain_template'
     name = sa.Column(sa.String(255))
     description = sa.Column(sa.String(1024))
     services_types = sa.Column(sa.VARCHAR(2048))
 
 
 class ServiceChain(model_base.BASEV2, models_v2.HasId, models_v2.HasTenant):
-    """Represents a service resource"""
-    __tablename__ = 'service_chain'
+    """Represents a service chain resource"""
     name = sa.Column(sa.String(255))
     description = sa.Column(sa.String(1024))
     service_chain_template_id = sa.Column(sa.String(36), sa.ForeignKey(
-                                          'service_chain_template.id'))
+                                          'servicechaintemplates.id'))
     source_network_id = sa.Column(sa.String(36), sa.ForeignKey("networks.id"))
     destination_network_id = sa.Column(sa.String(36),
                                        sa.ForeignKey("networks.id"))

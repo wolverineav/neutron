@@ -103,6 +103,10 @@ restproxy_opts = [
                help=_("Firewall policies and rules to load from config")),
     cfg.StrOpt('service_chain_templates', default='{}',
                help=_("Service chain tempaltes to load from config")),
+    cfg.StrOpt('firewall_metadata', default='{}',
+               help=_("Meta information for creating a firewall instance")),
+    cfg.StrOpt('loadbalancer_metadata', default='{}',
+               help=_("Meta information for creating a loadbalancer instance")),
 ]
 
 
@@ -381,6 +385,12 @@ class QuantumRestProxyV2(db_base_plugin_v2.QuantumDbPluginV2,
         LOG.debug(_("QuantumRestProxyV2: Read form config firewall dict: %s"),
                      self._firewall_dict)
         self._init_firewall_policies(self._firewall_dict)
+        self._fw_meta = json.loads(cfg.CONF.RESTPROXY.firewall_metadata)
+        LOG.debug(_("QuantumRestProxyV2: Read form config firewall "
+                    "metadata: %s"), self._fw_meta)
+        self._lb_meta = json.loads(cfg.CONF.RESTPROXY.loadbalancer_metadata)
+        LOG.debug(_("QuantumRestProxyV2: Read form config loadbalancer "
+                    "metadata: %s"), self._lb_meta)
         self._template_dict = json.loads(cfg.CONF.RESTPROXY.service_chain_templates)
         LOG.debug(_("QuantumRestProxyV2: Read form config service chain template "
                     "dict: %s"), self._template_dict)
@@ -1397,6 +1407,11 @@ class QuantumRestProxyV2(db_base_plugin_v2.QuantumDbPluginV2,
                 'security-group' in self.supported_extension_aliases}
         return port
 
+    def _add_attrs_to_resource(self, resource, attr_dict):
+        for k, v in attr_dict.iteritems():
+            resource['firewall'][k] = v
+        return resource
+
     def _create_resource(self, context, resource, resource_name,
                          controller_uri):
         """Creates a resource in the DB and in the backend controller"""
@@ -1405,12 +1420,16 @@ class QuantumRestProxyV2(db_base_plugin_v2.QuantumDbPluginV2,
         create_db = getattr(super(QuantumRestProxyV2, self),
                               'create_' + resource_name)
         new_resource = create_db(context, resource)
+        # add any attrs that we populated for the backend but
+        # we did not get back in the resource created in the DB
+        for k, v in resource[resource_name].iteritems():
+            if k not in new_resource:
+                new_resource[k] = v
         # create resource on network controller
         try:
             resource_uri = controller_uri % new_resource['tenant_id']
             data = {
                 resource_name: new_resource
-                #TODO (Sumit): Add vendor
             }
             ret = self.servers.post(resource_uri, data)
             if not self.servers.action_success(ret):
@@ -1487,10 +1506,12 @@ class QuantumRestProxyV2(db_base_plugin_v2.QuantumDbPluginV2,
                                                             fields)
 
     def create_firewall(self, context, firewall):
+        firewall = self._add_attrs_to_resource(firewall, self._fw_meta)
         return self._create_resource(context, firewall, FIREWALL,
                                      FIREWALL_RESOURCE_PATH)
 
     def update_firewall(self, context, id, firewall):
+        firewall = self._add_attrs_to_resource(firewall, self._fw_meta)
         return self._update_resource(context, id, firewall, FIREWALL,
                                      FIREWALLS_PATH)
 
@@ -1856,68 +1877,20 @@ class QuantumRestProxyV2(db_base_plugin_v2.QuantumDbPluginV2,
             raise
 
     def create_loadbalancer(self, context, loadbalancer):
-        LOG.debug(_("QuantumRestProxyV2: LB create_loadbalancer() called"))
-        new_lb = super(QuantumRestProxyV2,
-                       self).create_loadbalancer(context, loadbalancer)
-        # create loadbalancer on network controller
-        try:
-            resource = LOADBALANCER_RESOURCE_PATH % new_lb['tenant_id']
-            data = {
-                "loadbalancer": new_lb
-                #TODO (Sumit): Add vendor
-            }
-            ret = self.servers.post(resource, data)
-            if not self.servers.action_success(ret):
-                raise RemoteRestError(ret[2])
-        except RemoteRestError as e:
-            LOG.error(_("QuantumRestProxyV2:Unable to create remote "
-                        "loadbalancer: %s"), e.message)
-            # rollback creation of loadbalancer
-            super(QuantumRestProxyV2, self).delete_loadbalancer(context,
-                                                                new_lb['id'])
-            raise
-        return new_lb
+        loadbalancer = self._add_attrs_to_resource(loadbalancer,
+                                                   self._lb_meta)
+        return self._create_resource(context, loadbalancer, LOADBALANCER,
+                                     LOADBALANCER_RESOURCE_PATH)
 
     def update_loadbalancer(self, context, id, loadbalancer):
-        LOG.debug(_("QuantumRestProxyV2: LB update_loadbalancer() called"))
-        orig_lb = super(QuantumRestProxyV2, self).get_loadbalancer(context, id)
-        new_lb = super(QuantumRestProxyV2,
-                       self).update_loadbalancer(context, id, loadbalancer)
-
-        # update on networl ctrl
-        try:
-            resource = LOADBALANCERS_PATH % (orig_lb["tenant_id"], id)
-            data = {"loadbalancer": new_lb}
-            ret = self.servers.put(resource, data)
-            if not self.servers.action_success(ret):
-                raise RemoteRestError(ret[2])
-
-        except RemoteRestError as e:
-            LOG.error(_("QuantumRestProxyV2: Unable to update remote lb: "
-                        "%s"), e.message)
-            # reset to original state
-            super(QuantumRestProxyV2,
-                  self).update_loadbalancer(context, id, orig_lb)
-            raise
-
-        return new_lb
+        loadbalancer = self._add_attrs_to_resource(loadbalancer,
+                                                   self._lb_meta)
+        return self._update_resource(context, id, loadbalancer, LOADBALANCER,
+                                     LOADBALANCERS_PATH)
 
     def delete_loadbalancer(self, context, id):
-        LOG.debug(_("QuantumRestProxyV2: LB delete_loadbalancer() called"))
-        lb = self.get_loadbalancer(context, id)
-        # delete from network ctrl. Remote error on delete is ignored
-        try:
-            resource = LOADBALANCERS_PATH % (lb['tenant_id'], id)
-            ret = self.servers.delete(resource)
-            if not self.servers.action_success(ret):
-                raise RemoteRestError(ret[2])
-            ret_val = super(QuantumRestProxyV2,
-                            self).delete_loadbalancer(context, id)
-            return ret_val
-        except RemoteRestError as e:
-            LOG.error(_("QuantumRestProxyV2: Unable to delete remote "
-                        "loadbalancer: %s"), e.message)
-            raise
+        return self._delete_resource(context, id, LOADBALANCER,
+                                     LOADBALANCERS_PATH)
 
     """
     Service Chain API implementation.

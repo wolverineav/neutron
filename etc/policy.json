@@ -91,6 +91,11 @@
     "get_firewall_policy": "rule:admin_or_owner or rule:shared",
     "get_firewall_policies": "rule:admin_or_owner or rule:shared",
     "update_firewall_policy": "rule:admin_or_owner",
-    "delete_firewall_policy": "rule:admin_or_owner"
+    "delete_firewall_policy": "rule:admin_or_owner",
 
+    "create_service_chain_template": "",
+    "get_service_chain_template": "rule:admin_or_owner or rule:shared",
+    "get_service_chain_templates": "rule:admin_or_owner or rule:shared",
+    "update_service_chain_template": "rule:admin_or_owner",
+    "delete_service_chain_template": "rule:admin_or_owner"
 }

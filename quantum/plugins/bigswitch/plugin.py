@@ -455,6 +455,7 @@ class QuantumRestProxyV2(db_base_plugin_v2.QuantumDbPluginV2,
         return {'name': '',
                 'description': '',
                 'tenant_id': tenant_id,
+                'shared': True,
                 'services_types_list': []}
 
     def _init_service_chain_templates(self, template_dict):

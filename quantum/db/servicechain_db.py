@@ -37,6 +37,7 @@ class ServiceChainTemplate(model_base.BASEV2, models_v2.HasId,
     name = sa.Column(sa.String(255))
     description = sa.Column(sa.String(1024))
     services_types = sa.Column(sa.VARCHAR(2048))
+    shared = sa.Column(sa.Boolean)
 
 
 class ServiceChain(model_base.BASEV2, models_v2.HasId, models_v2.HasTenant):
@@ -75,11 +76,13 @@ class ServiceChain_db_mixin(servicechain.ServiceChainPluginBase):
         return sc
 
     def _make_service_chain_template_dict(self, sct, fields=None):
+        LOG.debug(_('sumit: %s'), sct)
         types_list = sct['services_types'].split(',')
         res = {'id': sct['id'],
                'name': sct['name'],
                'description': sct['description'],
                'tenant_id': sct['tenant_id'],
+               'shared': sct['shared'],
                'services_types_list': types_list}
         return self._fields(res, fields)
 
@@ -154,6 +157,7 @@ class ServiceChain_db_mixin(servicechain.ServiceChainPluginBase):
                                           tenant_id=tenant_id,
                                           name=sct['name'],
                                           description=sct['description'],
+                                          shared=sct['shared'],
                                           services_types=types_list_str)
             context.session.add(sct_db)
         return self._make_service_chain_template_dict(sct_db)

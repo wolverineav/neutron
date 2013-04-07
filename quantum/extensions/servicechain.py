@@ -138,11 +138,11 @@ class Servicechain(extensions.ExtensionDescriptor):
 
     @classmethod
     def get_name(cls):
-        return "Service Chain"
+        return "service-chain"
 
     @classmethod
     def get_alias(cls):
-        return "service_chains"
+        return "service-chain"
 
     @classmethod
     def get_description(cls):
@@ -177,10 +177,6 @@ class Servicechain(extensions.ExtensionDescriptor):
             exts.append(ex)
 
         return exts
-
-    @classmethod
-    def get_plugin_interface(cls):
-        return ServiceChainPluginBase
 
     def update_attributes_map(self, attributes):
         super(Servicechain, self).update_attributes_map(
@@ -231,4 +227,8 @@ class ServiceChainPluginBase(object):
     @abc.abstractmethod
     def update_service_chain_template(self, context, id,
                                       service_chain_template):
+        pass
+
+    @abc.abstractmethod
+    def delete_service_chain_template(self, context, id):
         pass

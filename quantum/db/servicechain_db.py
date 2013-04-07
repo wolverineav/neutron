@@ -56,7 +56,6 @@ class ServiceChain(model_base.BASEV2, models_v2.HasId, models_v2.HasTenant):
 class ServiceChain_db_mixin(servicechain.ServiceChainPluginBase):
     """Mixin class to add Service Chain methods to db_plugin_base_v2"""
 
-
     def _get_service_chain_template(self, context, id):
         try:
             sct = self._get_by_id(context, ServiceChainTemplate, id)

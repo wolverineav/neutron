@@ -324,13 +324,12 @@ class RpcProxy(dhcp_rpc_base.DhcpRpcCallbackMixin):
 
 class QuantumRestProxyV2(db_base_plugin_v2.QuantumDbPluginV2,
                          l3_db.L3_NAT_db_mixin,
-                         #firewall.FirewallPluginBase,
                          firewall_db.Firewall_db_mixin,
                          loadbalancer_db.LoadBalancerPluginDb,
                          servicechain_db.ServiceChain_db_mixin):
 
     supported_extension_aliases = ["router", "binding", "firewall", "lbaas",
-                                   "service_chains"]
+                                   "service-chain"]
 
     binding_view = "extension:port_binding:view"
     binding_set = "extension:port_binding:set"

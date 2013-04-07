@@ -76,7 +76,6 @@ class ServiceChain_db_mixin(servicechain.ServiceChainPluginBase):
         return sc
 
     def _make_service_chain_template_dict(self, sct, fields=None):
-        LOG.debug(_('sumit: %s'), sct)
         types_list = sct['services_types'].split(',')
         res = {'id': sct['id'],
                'name': sct['name'],

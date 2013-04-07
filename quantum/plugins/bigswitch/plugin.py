@@ -148,6 +148,7 @@ HEALTHMONITOR = "health_monitor"
 FIREWALL_RULE = "firewall_rule"
 FIREWALL_POLICY = "firewall_policy"
 SERVICE_CHAIN = "service_chain"
+SERVICE_CHAIN_TEMPLATE = "service_chain_template"
 MEMBER_ID = "%s-%s"
 SUCCESS_CODES = range(200, 207)
 FAILURE_CODES = [0, 301, 302, 303, 400, 401, 403, 404, 500, 501, 502, 503,
@@ -381,6 +382,10 @@ class QuantumRestProxyV2(db_base_plugin_v2.QuantumDbPluginV2,
         LOG.debug(_("QuantumRestProxyV2: Read form config firewall dict: %s"),
                      self._firewall_dict)
         self._init_firewall_policies(self._firewall_dict)
+        self._template_dict = json.loads(cfg.CONF.RESTPROXY.service_chain_templates)
+        LOG.debug(_("QuantumRestProxyV2: Read form config service chain template "
+                    "dict: %s"), self._template_dict)
+        self._init_service_chain_templates(self._template_dict)
         LOG.debug(_("QuantumRestProxyV2: initialization done"))
 
     def _get_default_fwrule_dict(self, tenant_id):
@@ -402,7 +407,6 @@ class QuantumRestProxyV2(db_base_plugin_v2.QuantumDbPluginV2,
                 'tenant_id': tenant_id,
                 'audited': True,
                 'firewall_rules_list': []}
-
 
     def _init_firewall_policies(self, firewall_dict):
         context = qcontext.get_admin_context()
@@ -447,6 +451,33 @@ class QuantumRestProxyV2(db_base_plugin_v2.QuantumDbPluginV2,
                                             policy)
             else:
                 self.create_firewall_policy(context, policy)
+
+    def _get_default_chain_template_dict(self, tenant_id):
+        return {'name': '',
+                'description': '',
+                'tenant_id': tenant_id,
+                'services_types_list': []}
+
+    def _init_service_chain_templates(self, template_dict):
+        context = qcontext.get_admin_context()
+        tenant_id = context.tenant_id
+        for tmpl_name, tmpl in template_dict.iteritems():
+            template = self._get_default_chain_template_dict(tenant_id)
+            template['name'] = tmpl_name
+            for k1, v1 in tmpl.iteritems():
+                template[k1] = v1
+            # TODO (Sumit): check if shared attr needs to be set
+            sc_tmpl = {SERVICE_CHAIN_TEMPLATE: template}
+            filter = {'name': [tmpl_name]}
+            # note we are assuming if the template is present there is only one
+            orig_tmpl = self.get_service_chain_templates(context,
+                                                         filters=filter)
+            if orig_tmpl and orig_tmpl[0] and orig_tmpl[0]['id']:
+                self.update_service_chain_template(context,
+                                                   orig_tmpl[0]['id'],
+                                                   sc_tmpl)
+            else:
+                self.create_service_chain_template(context, sc_tmpl)
 
     def get_plugin_services(self):
         supported_svcs = {constants.FIREWALL:'Firewall service plugin',

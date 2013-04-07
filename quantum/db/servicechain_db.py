@@ -78,14 +78,16 @@ class ServiceChain_db_mixin(servicechain.ServiceChainPluginBase):
         return sc
 
     def _make_service_chain_template_dict(self, sct, fields=None):
+        types_list = sct['services_types'].split(',')
         res = {'id': sct['id'],
                'name': sct['name'],
                'description': sct['description'],
                'tenant_id': sct['tenant_id'],
-               'services_types_list': sct['services_types']}
+               'services_types_list': types_list}
         return self._fields(res, fields)
 
     def _make_service_chain_dict(self, sc, fields=None):
+        services_list = sc['services_chain'].split(',')
         res = {'id': sc['id'],
                'name': sc['name'],
                'description': sc['description'],
@@ -93,7 +95,7 @@ class ServiceChain_db_mixin(servicechain.ServiceChainPluginBase):
                'service_chain_template_id': sc['service_chain_template_id'],
                'source_network_id': sc['service_network_id'],
                'destination_network_id': sc['destination_network_id'],
-               'services_chain': sc['services_chain']}
+               'services_list': services_list}
         return self._fields(res, fields)
 
     def create_service_chain(self, context, service_chain):
@@ -101,6 +103,7 @@ class ServiceChain_db_mixin(servicechain.ServiceChainPluginBase):
         if not sc['source_network_id'] and not sc['destination_network_id']:
             raise servicechain.ServiceChainNoNetworks()
         tenant_id = self._get_tenant_id_for_create(context, sc)
+        services_list_str = ','.join(sc['services_chain_list'])
         with context.session.begin(subtransactions=True):
             sc_db = ServiceChain(id=uuidutils.generate_uuid(),
                                  tenant_id=tenant_id,
@@ -112,8 +115,7 @@ class ServiceChain_db_mixin(servicechain.ServiceChainPluginBase):
                                  sc['source_network_id'],
                                  destination_network_id=
                                  sc['destination_network_id'],
-                                 services_chain=
-                                 sc['services_chain_list'])
+                                 services_chain=services_list_str)
             context.session.add(sc_db)
         return self._make_service_chain_dict(sc_db)
 
@@ -149,13 +151,13 @@ class ServiceChain_db_mixin(servicechain.ServiceChainPluginBase):
     def create_service_chain_template(self, context, service_chain_template):
         sct = service_chain_template['service_chain_template']
         tenant_id = self._get_tenant_id_for_create(context, sct)
+        types_list_str = ','.join(sct['services_types_list'])
         with context.session.begin(subtransactions=True):
             sct_db = ServiceChainTemplate(id=uuidutils.generate_uuid(),
                                           tenant_id=tenant_id,
                                           name=sct['name'],
                                           description=sct['description'],
-                                          services_types=
-                                          sct['services_type_list'])
+                                          services_types=types_list_str)
             context.session.add(sct_db)
         return self._make_service_chain_template_dict(sct_db)
 

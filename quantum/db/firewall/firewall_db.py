@@ -54,6 +54,7 @@ class FirewallRule(model_base.BASEV2, models_v2.HasId, models_v2.HasTenant):
     action = sa.Column(sa.Enum('allow', 'deny',
                                   name='firewallrules_action'))
     dynamic_attributes = sa.Column(sa.String(1024))
+    shared = sa.Column(sa.Boolean)
 
 
 class FirewallPolicy(model_base.BASEV2, models_v2.HasId, models_v2.HasTenant):
@@ -65,6 +66,7 @@ class FirewallPolicy(model_base.BASEV2, models_v2.HasId, models_v2.HasTenant):
                                       secondary=
                                       'firewall_policy_rule_association')
     audited = sa.Column(sa.Boolean)
+    shared = sa.Column(sa.Boolean)
 
 
 class Firewall(model_base.BASEV2, models_v2.HasId, models_v2.HasTenant):
@@ -131,6 +133,7 @@ class Firewall_db_mixin(firewall.FirewallPluginBase):
                'description': firewall_policy['description'],
                'tenant_id': firewall_policy['tenant_id'],
                'audited': firewall_policy['audited'],
+               'shared': firewall_policy['shared'],
                'firewall_rules_list': fw_rules}
         return self._fields(res, fields)
 
@@ -147,6 +150,7 @@ class Firewall_db_mixin(firewall.FirewallPluginBase):
                'port_range_max': firewall_rule['port_range_max'],
                'application': firewall_rule['application'],
                'action': firewall_rule['action'],
+               'shared': firewall_rule['shared'],
                'dynamic_attributes': firewall_rule['dynamic_attributes']}
         return self._fields(res, fields)
 
@@ -203,6 +207,7 @@ class Firewall_db_mixin(firewall.FirewallPluginBase):
                                     tenant_id=tenant_id,
                                     name=fwp['name'],
                                     description=fwp['description'],
+                                    shared=fwp['shared'],
                                     audited=fwp['audited'])
                                     #firewall_rules=fwp['firewall_rules_list'])
             context.session.add(fwp_db)
@@ -291,6 +296,7 @@ class Firewall_db_mixin(firewall.FirewallPluginBase):
                                   port_range_max=fwr['port_range_max'],
                                   application=fwr['application'],
                                   action=fwr['action'],
+                                  shared=fwr['shared'],
                                   dynamic_attributes=
                                   fwr['dynamic_attributes'])
             context.session.add(fwr_db)

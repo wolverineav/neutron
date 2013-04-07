@@ -398,6 +398,7 @@ class QuantumRestProxyV2(db_base_plugin_v2.QuantumDbPluginV2,
                 'port_range_max': 0,
                 'application': '',
                 'action': 'deny',
+                'shared': True,
                 'dynamic_attributes': ''}
 
     def _get_default_fwpolicy_dict(self, tenant_id):
@@ -405,6 +406,7 @@ class QuantumRestProxyV2(db_base_plugin_v2.QuantumDbPluginV2,
                 'description': '',
                 'tenant_id': tenant_id,
                 'audited': True,
+                'shared': True,
                 'firewall_rules_list': []}
 
     def _init_firewall_policies(self, firewall_dict):

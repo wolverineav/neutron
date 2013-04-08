@@ -1409,7 +1409,7 @@ class QuantumRestProxyV2(db_base_plugin_v2.QuantumDbPluginV2,
 
     def _add_attrs_to_resource(self, resource, attr_dict):
         for k, v in attr_dict.iteritems():
-            resource['firewall'][k] = v
+            resource[k] = v
         return resource
 
     def _create_resource(self, context, resource, resource_name,
@@ -1506,7 +1506,8 @@ class QuantumRestProxyV2(db_base_plugin_v2.QuantumDbPluginV2,
                                                             fields)
 
     def create_firewall(self, context, firewall):
-        firewall = self._add_attrs_to_resource(firewall, self._fw_meta)
+        firewall[FIREWALL] = self._add_attrs_to_resource(firewall[FIREWALL],
+                                                         self._fw_meta)
         return self._create_resource(context, firewall, FIREWALL,
                                      FIREWALL_RESOURCE_PATH)
 
@@ -1877,8 +1878,8 @@ class QuantumRestProxyV2(db_base_plugin_v2.QuantumDbPluginV2,
             raise
 
     def create_loadbalancer(self, context, loadbalancer):
-        loadbalancer = self._add_attrs_to_resource(loadbalancer,
-                                                   self._lb_meta)
+        loadbalancer[LOADBALANCER] = self._add_attrs_to_resource(loadbalancer[LOADBALANCER],
+                                                                 self._lb_meta)
         return self._create_resource(context, loadbalancer, LOADBALANCER,
                                      LOADBALANCER_RESOURCE_PATH)
 

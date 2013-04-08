@@ -92,7 +92,7 @@ class ServiceChain_db_mixin(servicechain.ServiceChainPluginBase):
                'description': sc['description'],
                'tenant_id': sc['tenant_id'],
                'service_chain_template_id': sc['service_chain_template_id'],
-               'source_network_id': sc['service_network_id'],
+               'source_network_id': sc['source_network_id'],
                'destination_network_id': sc['destination_network_id'],
                'services_list': services_list}
         return self._fields(res, fields)
@@ -102,14 +102,14 @@ class ServiceChain_db_mixin(servicechain.ServiceChainPluginBase):
         if not sc['source_network_id'] and not sc['destination_network_id']:
             raise servicechain.ServiceChainNoNetworks()
         tenant_id = self._get_tenant_id_for_create(context, sc)
-        services_list_str = ','.join(sc['services_chain_list'])
+        services_list_str = ','.join(sc['services_list'])
         with context.session.begin(subtransactions=True):
             sc_db = ServiceChain(id=uuidutils.generate_uuid(),
                                  tenant_id=tenant_id,
                                  name=sc['name'],
                                  description=sc['description'],
                                  service_chain_template_id=
-                                 sc['service_chain_template_id'],
+                                 sc['template_id'],
                                  source_network_id=
                                  sc['source_network_id'],
                                  destination_network_id=

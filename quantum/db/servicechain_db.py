@@ -46,9 +46,8 @@ class ServiceChain(model_base.BASEV2, models_v2.HasId, models_v2.HasTenant):
     description = sa.Column(sa.String(1024))
     service_chain_template_id = sa.Column(sa.String(36), sa.ForeignKey(
                                           'servicechaintemplates.id'))
-    source_network_id = sa.Column(sa.String(36), sa.ForeignKey("networks.id"))
-    destination_network_id = sa.Column(sa.String(36),
-                                       sa.ForeignKey("networks.id"))
+    source_network_id = sa.Column(sa.String(36))
+    destination_network_id = sa.Column(sa.String(36))
     services_chain = sa.Column(sa.VARCHAR(2048))
 
 

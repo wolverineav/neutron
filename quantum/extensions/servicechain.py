@@ -80,6 +80,13 @@ def _convert_to_service_type_list(value_list):
     return value_list
 
 
+def _convert_to_uuid_or_none(str_id):
+    if not uuidutils.is_uuid_like(str_id):
+        # TODO (Sumit): do we need to consider other possibilities
+        return ''
+    return str_id
+
+
 RESOURCE_ATTRIBUTE_MAP = {
     'service_chain_templates': {
         'id': {'allow_post': False, 'allow_put': False,
@@ -121,10 +128,10 @@ RESOURCE_ATTRIBUTE_MAP = {
                         'validate': {'type:uuid': None},
                         'is_visible': True},
         'source_network_id': {'allow_post': True, 'allow_put': True,
-                              'validate': {'type:uuid': None},
+                              'convert_to': _convert_to_uuid_or_none,
                               'is_visible': True},
         'destination_network_id': {'allow_post': True, 'allow_put': True,
-                                   'validate': {'type:uuid': None},
+                                   'convert_to': _convert_to_uuid_or_none,
                                    'is_visible': True},
         'services_list': {'allow_post': True, 'allow_put': True,
                           'is_visible': True,

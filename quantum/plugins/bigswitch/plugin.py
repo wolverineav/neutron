@@ -1415,7 +1415,7 @@ class QuantumRestProxyV2(db_base_plugin_v2.QuantumDbPluginV2,
     def _create_resource(self, context, resource, resource_name,
                          controller_uri):
         """Creates a resource in the DB and in the backend controller"""
-        LOG.error(_("QuantumRestProxyV2: create_%s() called for %s"),
+        LOG.debug(_("QuantumRestProxyV2: create_%s() called for %s"),
                     resource_name, resource)
         create_db = getattr(super(QuantumRestProxyV2, self),
                               'create_' + resource_name)
@@ -1447,7 +1447,7 @@ class QuantumRestProxyV2(db_base_plugin_v2.QuantumDbPluginV2,
     def _update_resource(self, context, id, resource, resource_name,
                          controller_uri):
         """Updates a resource in the DB and in the backend controller"""
-        LOG.error(_("QuantumRestProxyV2: update_%s() called"), resource_name)
+        LOG.debug(_("QuantumRestProxyV2: update_%s() called"), resource_name)
         get_from_db = getattr(super(QuantumRestProxyV2, self),
                               'get_' + resource_name)
         orig_resource = get_from_db(context, id)

@@ -55,6 +55,28 @@
     "update_port:mac_learning_enabled": "rule:admin_or_network_owner",
     "delete_port": "rule:admin_or_owner",
 
+    "create_firewall": "",
+    "get_firewall": "rule:admin_or_owner",
+    "create_firewall:shared": "rule:admin_only",
+    "get_firewall:shared": "rule:admin_only",
+    "update_firewall": "rule:admin_or_owner",
+    "delete_firewall": "rule:admin_or_owner",
+
+    "create_firewall_policy": "",
+    "get_firewall_policy": "rule:admin_or_owner",
+    "create_firewall_policy:shared": "rule:admin_or_owner",
+    "get_firewall_policy:shared": "rule:admin_or_owner",
+    "get_firewall_policy:audited": "rule:admin_or_owner",
+    "update_firewall_policy": "rule:admin_or_owner",
+    "delete_firewall_policy": "rule:admin_or_owner",
+
+    "create_firewall_rule": "",
+    "get_firewall_rule": "rule:admin_or_owner",
+    "create_firewall_rule:shared": "rule:admin_or_owner",
+    "get_firewall_rule:shared": "rule:admin_or_owner",
+    "update_firewall_rule": "rule:admin_or_owner",
+    "delete_firewall_rule": "rule:admin_or_owner",
+
     "create_service_type": "rule:admin_only",
     "update_service_type": "rule:admin_only",
     "delete_service_type": "rule:admin_only",

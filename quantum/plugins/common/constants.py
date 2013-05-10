@@ -19,20 +19,23 @@
 CORE = "CORE"
 DUMMY = "DUMMY"
 LOADBALANCER = "LOADBALANCER"
+FIREWALL = "FIREWALL"
 
 #maps extension alias to service type
 EXT_TO_SERVICE_MAPPING = {
     'dummy': DUMMY,
-    'lbaas': LOADBALANCER
+    'lbaas': LOADBALANCER,
+    'fwaas': FIREWALL
 }
 
 # TODO(salvatore-orlando): Move these (or derive them) from conf file
-ALLOWED_SERVICES = [CORE, DUMMY, LOADBALANCER]
+ALLOWED_SERVICES = [CORE, DUMMY, LOADBALANCER, FIREWALL]
 
 COMMON_PREFIXES = {
     CORE: "",
     DUMMY: "/dummy_svc",
     LOADBALANCER: "/lb",
+    FIREWALL: "/firewall",
 }
 
 # Service operation status constants

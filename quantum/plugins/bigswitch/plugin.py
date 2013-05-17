@@ -485,7 +485,7 @@ class QuantumRestProxyV2(db_base_plugin_v2.QuantumDbPluginV2,
     def get_network(self, context, id, fields=None):
         session = context.session
         with session.begin(subtransactions=True):
-            net = super(OVSQuantumPluginV2, self).get_network(context,
+            net = super(QuantumRestProxyV2, self).get_network(context,
                                                               id, None)
             self._extend_network_dict_l3(context, net)
         return self._fields(net, fields)
@@ -495,7 +495,7 @@ class QuantumRestProxyV2(db_base_plugin_v2.QuantumDbPluginV2,
                      limit=None, marker=None, page_reverse=False):
         session = context.session
         with session.begin(subtransactions=True):
-            nets = super(OVSQuantumPluginV2,
+            nets = super(QuantumRestProxyV2,
                          self).get_networks(context, filters, None, sorts,
                                             limit, marker, page_reverse)
             for net in nets:

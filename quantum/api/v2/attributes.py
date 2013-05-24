@@ -216,6 +216,48 @@ def _validate_hostroutes(data, valid_values=None):
             return msg
         hostroutes.append(hostroute)
 
+def _validate_router_rules(data, valid_values=None):
+    if not isinstance(data, list):
+        msg = _("Invalid data format for router rule: '%s'") % data
+        LOG.debug(msg)
+        return msg
+
+    expected_keys = ['source', 'destination', 'action']
+    rules = []
+    for rule in data:
+        msg = _verify_dict_keys(expected_keys, rule)
+        if msg:
+            msg = _verify_dict_keys(expected_keys+['nexthops'],rule)
+        if msg:
+            LOG.debug(msg)
+            return msg
+        msg = _validate_subnet(rule['destination'])
+        if msg and not rule['destination']=='any':
+            LOG.debug(msg)
+            return msg
+        msg = _validate_subnet(rule['source'])
+        if msg and not rule['source']=='any':
+            LOG.debug(msg)
+            return msg
+        try:
+           rule['nexthops']=rule['nexthops'].split('+')
+        except KeyError:
+           rule['nexthops']=[]
+        for ip in rule['nexthops']:
+            msg = _validate_ip_address(ip)
+            if msg:
+                LOG.debug(msg)
+                return msg
+        if (not rule['action']=='permit' and not rule['action']=='deny'):
+            msg = _("Action must be either permit or deny. '%s' was provided") % rule['action']
+            LOG.debug(msg)
+            return msg
+        if rule in rules:
+            msg = _("Duplicate router rule '%s'") % rule
+            LOG.debug(msg)
+            return msg
+        rules.append(rule)
+
 
 def _validate_ip_address_or_none(data, valid_values=None):
     if data is None:
@@ -442,6 +484,7 @@ validators = {'type:dict': _validate_dict,
               'type:non_negative': _validate_non_negative,
               'type:range': _validate_range,
               'type:regex': _validate_regex,
+              'type:routerrules': _validate_router_rules,
               'type:string': _validate_string,
               'type:subnet': _validate_subnet,
               'type:uuid': _validate_uuid,

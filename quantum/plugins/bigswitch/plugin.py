@@ -63,7 +63,9 @@ from quantum.db import api as db
 from quantum.db import db_base_plugin_v2
 from quantum.db import dhcp_rpc_base
 from quantum.db import l3_db
+from quantum.db import routerrule_db
 from quantum.extensions import l3
+from quantum.extensions import routerrule
 from quantum.extensions import portbindings
 from quantum.openstack.common import lockutils
 from quantum.openstack.common import log as logging
@@ -282,9 +284,9 @@ class RpcProxy(dhcp_rpc_base.DhcpRpcCallbackMixin):
 
 
 class QuantumRestProxyV2(db_base_plugin_v2.QuantumDbPluginV2,
-                         l3_db.L3_NAT_db_mixin):
+                         routerrule_db.RouterRule_db_mixin):
 
-    supported_extension_aliases = ["router", "binding"]
+    supported_extension_aliases = ["router", "binding" ,"routerrule"]
 
     binding_view = "extension:port_binding:view"
     binding_set = "extension:port_binding:set"
@@ -819,6 +821,9 @@ class QuantumRestProxyV2(db_base_plugin_v2.QuantumDbPluginV2,
         self._warn_on_state_status(router['router'])
 
         tenant_id = self._get_tenant_id_for_create(context, router["router"])
+
+        # default router rules
+        router['router']['routerrule']=[{'source':'any','destination':'any','action':'permit','nexthops':[]}]
 
         # create router in DB
         new_router = super(QuantumRestProxyV2, self).create_router(context,

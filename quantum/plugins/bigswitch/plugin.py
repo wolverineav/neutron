@@ -533,9 +533,12 @@ class QuantumRestProxyV2(db_base_plugin_v2.QuantumDbPluginV2,
 
         # Update DB
         port["port"]["admin_state_up"] = False
+        net_id = port["port"]["network_id"]
+        net = super(QuantumRestProxyV2, self).get_network(context, net_id)
+        tenant_id = net["tenant_id"]
+        if not port["port"]["tenant_id"]:
+            port["port"]["tenant_id"] = tenant_id
         new_port = super(QuantumRestProxyV2, self).create_port(context, port)
-        net = super(QuantumRestProxyV2,
-                    self).get_network(context, new_port["network_id"])
 
         if self.add_meta_server_route:
             if new_port['device_owner'] == 'network:dhcp':
@@ -544,7 +547,7 @@ class QuantumRestProxyV2(db_base_plugin_v2.QuantumDbPluginV2,
 
         # create on networl ctrl
         try:
-            resource = PORT_RESOURCE_PATH % (net["tenant_id"], net["id"])
+            resource = PORT_RESOURCE_PATH % (tenant_id, net_id)
             mapped_port = self._map_state_and_status(new_port)
             data = {
                 "port": mapped_port

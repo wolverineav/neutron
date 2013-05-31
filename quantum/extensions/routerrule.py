@@ -28,7 +28,7 @@ class InvalidRouterRules(qexception.InvalidInput):
 # Attribute Map
 EXTENDED_ATTRIBUTES_2_0 = {
     'routers': {
-        'routerrule': {'allow_post': False, 'allow_put': True,
+        'router_rules': {'allow_post': False, 'allow_put': True,
                    'validate': {'type:routerrules': None},
                    'is_visible': True, 'default': attr.ATTR_NOT_SPECIFIED},
     }
@@ -43,7 +43,7 @@ class Routerrule():
 
     @classmethod
     def get_alias(cls):
-        return "routerrule"
+        return "router_rules"
 
     @classmethod
     def get_description(cls):

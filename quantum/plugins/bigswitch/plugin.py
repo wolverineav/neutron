@@ -286,7 +286,7 @@ class RpcProxy(dhcp_rpc_base.DhcpRpcCallbackMixin):
 class QuantumRestProxyV2(db_base_plugin_v2.QuantumDbPluginV2,
                          routerrule_db.RouterRule_db_mixin):
 
-    supported_extension_aliases = ["router", "binding" ,"routerrule"]
+    supported_extension_aliases = ["router", "binding" ,"router_rules"]
 
     binding_view = "extension:port_binding:view"
     binding_set = "extension:port_binding:set"
@@ -823,7 +823,7 @@ class QuantumRestProxyV2(db_base_plugin_v2.QuantumDbPluginV2,
         tenant_id = self._get_tenant_id_for_create(context, router["router"])
 
         # default router rules
-        router['router']['routerrule']=[{'source':'any','destination':'any','action':'permit','nexthops':[]}]
+        router['router']['router_rules']=[{'source':'any','destination':'any','action':'permit','nexthops':[]}]
 
         # create router in DB
         new_router = super(QuantumRestProxyV2, self).create_router(context,

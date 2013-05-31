@@ -61,10 +61,10 @@ class RouterRule_db_mixin(l3_db.L3_NAT_db_mixin):
         r = router['router']
         with context.session.begin(subtransactions=True):
             router_db = self._get_router(context, id)
-            if 'routerrule' in r:
+            if 'router_rules' in r:
                 self._update_router_rules(context,
                                           router_db,
-                                          r['routerrule'])
+                                          r['router_rules'])
             router_updated = super(RouterRule_db_mixin, self).update_router(
                 context, id, router)
             router_updated['router_rules'] = self._get_router_rules_by_router_id(
@@ -77,10 +77,10 @@ class RouterRule_db_mixin(l3_db.L3_NAT_db_mixin):
         with context.session.begin(subtransactions=True):
             router_db = super(RouterRule_db_mixin, self).create_router(
                 context, router)
-            if 'routerrule' in r:
+            if 'router_rules' in r:
                 self._update_router_rules(context,
                                           router_db,
-                                          r['routerrule'])
+                                          r['router_rules'])
             else:
                 LOG.debug('No rules in router')
             router_db['router_rules'] = self._get_router_rules_by_router_id(
@@ -126,7 +126,8 @@ class RouterRule_db_mixin(l3_db.L3_NAT_db_mixin):
         ruleslist = []
         for rule in router_rules:
              hops = [hop['nexthop'] for hop in rule['nexthops']]
-             ruleslist.append({'destination': rule['destination'],
+             ruleslist.append({'id': rule['id'],
+                               'destination': rule['destination'],
                                'source': rule['source'],
                                'action': rule['action'],
                                'nexthops': hops})

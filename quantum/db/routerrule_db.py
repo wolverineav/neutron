@@ -135,8 +135,7 @@ class RouterRule_db_mixin(l3_db.L3_NAT_db_mixin):
 
     def _get_router_rules_by_router_id(self, context, id):
         query = context.session.query(RouterRule)
-        query.filter(RouterRule.router_id == id)
-        router_rules = query.all()
+        router_rules = query.filter(RouterRule.router_id == id).all()
         return self._make_router_rule_list(router_rules)
 
     def get_router(self, context, id, fields=None):

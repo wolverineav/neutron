@@ -97,8 +97,16 @@ restproxy_opts = [
                        "should be injected into the VM")),
 ]
 
+router_opts = [
+    cfg.StrOpt('tenant_default_routerrules', default='*:any:any:permit;',
+               help=_("The default router rules installed in newly created tenant routers. "
+                      "Rules are separated by semi-colons. "
+                      "Format is <tenant>:<source>:<destination>:<action>"
+                      " Use an * to specify default for all tenants."))
+]
 
 cfg.CONF.register_opts(restproxy_opts, "RESTPROXY")
+cfg.CONF.register_opts(router_opts, "ROUTER")
 
 
 # The following are used to invoke the API on the external controller
@@ -815,6 +823,31 @@ class QuantumRestProxyV2(db_base_plugin_v2.QuantumDbPluginV2,
             # TODO (Sumit): rollback deletion of subnet
             raise
 
+    def _get_tenant_default_routerrules(self, tenant):
+        config=cfg.CONF.ROUTER.tenant_default_routerrules
+        defaultset=[]
+        tenantset=[]
+        rules=config.split(';')
+        for rule in rules:
+            items=rule.split(':')
+            if len(items)==5:
+               (tenantid,source,destination,action,nexthops)=items
+            elif len(items)==4:
+               (tenantid,source,destination,action)=items
+               nexthops=''
+            else:
+               continue
+            parsedrule={'source':source,
+                  'destination':destination,'action':action,
+                  'nexthops':nexthops.split(',')}
+            if tenantid=='*':
+               defaultset.append(parsedrule)
+            if tenantid==tenant:
+               tenantset.append(parsedrule)
+        if len(tenantset)>0:
+            return tenantset
+        return defaultset
+
     def create_router(self, context, router):
         LOG.debug(_("QuantumRestProxyV2: create_router() called"))
 
@@ -823,7 +856,8 @@ class QuantumRestProxyV2(db_base_plugin_v2.QuantumDbPluginV2,
         tenant_id = self._get_tenant_id_for_create(context, router["router"])
 
         # default router rules
-        router['router']['router_rules']=[{'source':'any','destination':'any','action':'permit','nexthops':[]}]
+        router['router']['router_rules']=self._get_tenant_default_routerrules(tenant_id)
+
 
         # create router in DB
         new_router = super(QuantumRestProxyV2, self).create_router(context,

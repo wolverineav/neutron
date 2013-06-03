@@ -227,19 +227,14 @@ class IVSInterfaceDriver(LinuxInterfaceDriver):
         return dev_name
 
     def _ovs_add_port(self, bridge, device_name, port_id, mac_address):
-        bridge = 'indigo' #TODO: IVS has one bridge
+        bridge = 'indigo'  # IVS has one bridge
         cmd = ['ivs-ctl', 'add-port', bridge, device_name]
         utils.execute(cmd, self.root_helper)
 
     def plug(self, network_id, port_id, device_name, mac_address,
              bridge=None, namespace=None, prefix=None):
         """Plug in the interface."""
-        if not bridge:
-            bridge = self.conf.ovs_integration_bridge
-        #self.check_bridge_exists(bridge)
-        bridge = 'indigo' #TODO: ivs has one bridge
-
-
+        bridge = 'indigo'  # IVS has one bridge
         if not ip_lib.device_exists(device_name,
                                     self.root_helper,
                                     namespace=namespace):
@@ -269,10 +264,7 @@ class IVSInterfaceDriver(LinuxInterfaceDriver):
 
     def unplug(self, device_name, bridge=None, namespace=None, prefix=None):
         """Unplug the interface."""
-        if not bridge:
-            bridge = self.conf.ovs_integration_bridge
-        #self.check_bridge_exists(bridge)
-        bridge = 'indigo' #TODO: ivs has one bridge
+        bridge = 'indigo'  # IVS has one bridge
         tap_name = self._get_tap_name(device_name, prefix)
         try:
                 cmd = ['ivs-ctl', 'del-port', bridge, tap_name]

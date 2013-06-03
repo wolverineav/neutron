@@ -1258,7 +1258,7 @@ class QuantumRestProxyV2(db_base_plugin_v2.QuantumDbPluginV2,
 
     def _extend_port_dict_binding(self, context, port):
         if self._check_view_auth(context, port, self.binding_view):
-            port[portbindings.VIF_TYPE] = portbindings.VIF_TYPE_IVS
+            port[portbindings.VIF_TYPE] = portbindings.VIF_TYPE_OVS
             port[portbindings.CAPABILITIES] = {
                 portbindings.CAP_PORT_FILTER:
                 'security-group' in self.supported_extension_aliases}

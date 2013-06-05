@@ -63,19 +63,30 @@ from quantum.db import api as db
 from quantum.db import db_base_plugin_v2
 from quantum.db import dhcp_rpc_base
 from quantum.db import l3_db
-from quantum.db import routerrule_db
 from quantum.extensions import l3
-from quantum.extensions import routerrule
 from quantum.extensions import portbindings
 from quantum.openstack.common import lockutils
 from quantum.openstack.common import log as logging
 from quantum.openstack.common import rpc
 from quantum.plugins.bigswitch.version import version_string_with_vcs
+from quantum.plugins.bigswitch import routerrule_db
+from quantum.plugins.bigswitch.extensions import routerrule
 from quantum import policy
 
 
 LOG = logging.getLogger(__name__)
 
+# Include the BigSwitch Extensions path in the api_extensions
+EXTENSIONS_PATH='quantum/plugins/bigswitch/extensions'
+if not cfg.CONF.api_extensions_path:
+    cfg.CONF.set_override('api_extensions_path',
+                          EXTENSIONS_PATH)
+else:
+    extensions = cfg.CONF.api_extensions_path.split(':')
+    if not EXTENSIONS_PATH in extensions:
+        extensions.append(EXTENSIONS_PATH)
+        cfg.CONF.set_override('api_extensions_path',
+                              ':'.join(extensions))
 
 restproxy_opts = [
     cfg.StrOpt('servers', default='localhost:8800',

@@ -24,8 +24,8 @@ from sqlalchemy import orm
 from quantum.common import utils
 from quantum.db import l3_db
 from quantum.db import model_base
-from quantum.extensions import routerrule
 from quantum.openstack.common import log as logging
+from quantum.plugins.bigswitch.extensions import routerrule
 
 
 LOG = logging.getLogger(__name__)

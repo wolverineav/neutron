@@ -842,19 +842,21 @@ class QuantumRestProxyV2(db_base_plugin_v2.QuantumDbPluginV2,
         for rule in rules:
             items=rule.split(':')
             if len(items)==5:
-               (tenantid,source,destination,action,nexthops)=items
+                (tenantid,source,destination,action,nexthops)=items
             elif len(items)==4:
-               (tenantid,source,destination,action)=items
-               nexthops=''
+                (tenantid,source,destination,action)=items
+                nexthops=''
             else:
-               continue
+                continue
             parsedrule={'source':source,
                   'destination':destination,'action':action,
                   'nexthops':nexthops.split(',')}
+            if parsedrule['nexthops'][0]=='':
+                parsedrule['nexthops']=[]
             if tenantid=='*':
-               defaultset.append(parsedrule)
+                defaultset.append(parsedrule)
             if tenantid==tenant:
-               tenantset.append(parsedrule)
+                tenantset.append(parsedrule)
         if len(tenantset)>0:
             return tenantset
         return defaultset

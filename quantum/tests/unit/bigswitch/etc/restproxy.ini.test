@@ -24,3 +24,11 @@ reconnect_interval = 2
 servers=localhost:8899
 serverssl=False
 #serverauth=username:password
+
+[ROUTER]
+# Specify the default router rules installed in newly created tenant routers
+# Rules are separated by semi-colons
+# Format is <tenant>:<source>:<destination>:<action>
+# Use an * to specify default for all tenants
+# Default is any any allow for all tenants
+#tenant_default_routerrules=*:any:any:permit;

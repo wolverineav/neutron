@@ -54,7 +54,8 @@ def convert_to_valid_router_rules(data):
             LOG.debug(msg)
             raise qexception.InvalidInput(error_message=msg)
         try:
-           rule['nexthops']=rule['nexthops'].split('+')
+           if not isinstance(rule['nexthops'],list):
+               rule['nexthops']=rule['nexthops'].split('+')
         except KeyError:
            rule['nexthops']=[]
         for ip in rule['nexthops']:

@@ -42,7 +42,7 @@ class RouterRule(model_base.BASEV2):
             id = sa.Column(sa.Integer, primary_key=True)
             source = sa.Column(sa.String(64), nullable=False)
             destination = sa.Column(sa.String(64), nullable=False)
-            nexthops = orm.relationship('NextHop')
+            nexthops = orm.relationship('NextHop', cascade='all,delete')
             action = sa.Column(sa.String(10), nullable=False)
 	    router_id = sa.Column(sa.String(36),
                           sa.ForeignKey('routers.id',
@@ -97,10 +97,14 @@ class RouterRule_db_mixin(l3_db.L3_NAT_db_mixin):
                 quota=cfg.CONF.max_rules)
 
     def _update_router_rules(self, context, router, rules):
-        #TODO: validate routes
-        #remove old rules
+        query = context.session.query(RouterRule)
+        router_rules = query.filter(RouterRule.router_id == router['id']).all()
+        for rule in router_rules:
+            nh_del_context = context.session.query(NextHop)
+            nh_del_context.filter_by(rule_id=rule['id']).delete()
         del_context = context.session.query(RouterRule)
-        del_context.filter_by(router_id=router['id']).delete()
+        del_context.filter_by(router_id=router['id']).delete()        
+        context.session.flush()
         LOG.debug('Rules are %s' % rules)
         for rule in rules:
             router_rule = RouterRule(

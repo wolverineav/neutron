@@ -32,3 +32,5 @@ serverssl=False
 # Use an * to specify default for all tenants
 # Default is any any allow for all tenants
 #tenant_default_routerrules=*:any:any:permit;
+# Maximum number of rules that a single router may have
+max_router_rules=200

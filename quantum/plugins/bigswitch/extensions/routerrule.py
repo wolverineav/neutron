@@ -30,6 +30,11 @@ class InvalidRouterRules(qexception.InvalidInput):
     message = _("Invalid format for router rules: %(rule)s, %(reason)s")
 
 
+class RulesExhausted(qexception.BadRequest):
+    message = _("Unable to complete rules update for %(router_id)s. "
+                "The number of rules exceeds the maximum %(quota)s.")
+
+
 # Validates and converts router rules to the appropriate data structure
 def convert_to_valid_router_rules(data):
     if not isinstance(data, list):
@@ -41,30 +46,31 @@ def convert_to_valid_router_rules(data):
     for rule in data:
         msg = attr._verify_dict_keys(expected_keys, rule)
         if msg:
-            msg =attr._verify_dict_keys(expected_keys+['nexthops'],rule)
+            msg = attr._verify_dict_keys(expected_keys + ['nexthops'], rule)
         if msg:
             LOG.debug(msg)
             raise qexception.InvalidInput(error_message=msg)
         msg = attr._validate_subnet(rule['destination'])
-        if msg and not rule['destination']=='any':
+        if msg and not rule['destination'] == 'any':
             LOG.debug(msg)
             raise qexception.InvalidInput(error_message=msg)
         msg = attr._validate_subnet(rule['source'])
-        if msg and not rule['source']=='any':
+        if msg and not rule['source'] == 'any':
             LOG.debug(msg)
             raise qexception.InvalidInput(error_message=msg)
         try:
-           if not isinstance(rule['nexthops'],list):
-               rule['nexthops']=rule['nexthops'].split('+')
+            if not isinstance(rule['nexthops'], list):
+                rule['nexthops'] = rule['nexthops'].split('+')
         except KeyError:
-           rule['nexthops']=[]
+            rule['nexthops'] = []
         for ip in rule['nexthops']:
             msg = attr._validate_ip_address(ip)
             if msg:
                 LOG.debug(msg)
                 raise qexception.InvalidInput(error_message=msg)
-        if (not rule['action']=='permit' and not rule['action']=='deny'):
-            msg = _("Action must be either permit or deny. '%s' was provided") % rule['action']
+        if (not rule['action'] == 'permit' and not rule['action'] == 'deny'):
+            msg = _("Action must be either permit or deny."
+                    " '%s' was provided") % rule['action']
             LOG.debug(msg)
             raise qexception.InvalidInput(error_message=msg)
         if rule in rules:
@@ -73,7 +79,6 @@ def convert_to_valid_router_rules(data):
             raise qexception.InvalidInput(error_message=msg)
         rules.append(rule)
     return rules
-
 
 
 class Routerrule():
@@ -92,7 +97,7 @@ class Routerrule():
 
     @classmethod
     def get_namespace(cls):
-        return "http://docs.openstack.org/ext/quantum/routerrules/api/v1.0" 
+        return "http://docs.openstack.org/ext/quantum/routerrules/api/v1.0"
 
     @classmethod
     def get_updated(cls):
@@ -108,7 +113,8 @@ class Routerrule():
 EXTENDED_ATTRIBUTES_2_0 = {
     'routers': {
         'router_rules': {'allow_post': False, 'allow_put': True,
-                   'convert_to': convert_to_valid_router_rules,
-                   'is_visible': True, 'default': attr.ATTR_NOT_SPECIFIED},
+                         'convert_to': convert_to_valid_router_rules,
+                         'is_visible': True,
+                         'default': attr.ATTR_NOT_SPECIFIED},
     }
 }

@@ -99,6 +99,14 @@ restproxy_opts = [
 cfg.CONF.register_opts(restproxy_opts, "RESTPROXY")
 
 
+nova_opts = [
+    cfg.StrOpt('vif_type', default='ovs',
+               help=_("Virtual interface type to configure on "
+                      "Nova compute nodes")),
+]
+
+cfg.CONF.register_opts(nova_opts, "NOVA")
+
 # The following are used to invoke the API on the external controller
 NET_RESOURCE_PATH = "/tenants/%s/networks"
 PORT_RESOURCE_PATH = "/tenants/%s/networks/%s/ports"
@@ -1261,7 +1269,16 @@ class QuantumRestProxyV2(db_base_plugin_v2.QuantumDbPluginV2,
 
     def _extend_port_dict_binding(self, context, port):
         if self._check_view_auth(context, port, self.binding_view):
-            port[portbindings.VIF_TYPE] = portbindings.VIF_TYPE_OVS
+            cfg_vif_type = cfg.CONF.NOVA.vif_type
+            if cfg_vif_type.lower() == 'ovs':
+                port[portbindings.VIF_TYPE] = portbindings.VIF_TYPE_OVS
+            elif cfg_vif_type.lower() == 'ivs':
+                port[portbindings.VIF_TYPE] = portbindings.VIF_TYPE_IVS
+            else:
+                port[portbindings.VIF_TYPE] = portbindings.VIF_TYPE_OVS
+                LOG.warning(_("Unrecognized vif_type in configuration "
+                              "[%s]. Defaulting to ovs. "),
+                            cfg_vif_type)
             port[portbindings.CAPABILITIES] = {
                 portbindings.CAP_PORT_FILTER:
                 'security-group' in self.supported_extension_aliases}

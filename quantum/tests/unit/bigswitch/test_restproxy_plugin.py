@@ -18,13 +18,13 @@
 import os
 
 from mock import patch
+from oslo.config import cfg
 
 import quantum.common.test_lib as test_lib
 from quantum.extensions import portbindings
 from quantum.manager import QuantumManager
 from quantum.tests.unit import _test_extension_portbindings as test_bindings
 import quantum.tests.unit.test_db_plugin as test_plugin
-
 
 RESTPROXY_PKG_PATH = 'quantum.plugins.bigswitch.plugin'
 
@@ -91,6 +91,18 @@ class TestBigSwitchProxyPortsV2(test_plugin.TestPortsV2,
 
     VIF_TYPE = portbindings.VIF_TYPE_OVS
     HAS_PORT_FILTER = False
+
+
+class TestBigSwitchProxyPortsV2IVS(test_plugin.TestPortsV2,
+                                   BigSwitchProxyPluginV2TestCase,
+                                   test_bindings.PortBindingsTestCase):
+    VIF_TYPE = portbindings.VIF_TYPE_IVS
+    HAS_PORT_FILTER = False
+
+    def setUp(self):
+        super(TestBigSwitchProxyPortsV2IVS,
+              self).setUp()
+        cfg.CONF.set_override('vif_type', 'ivs', 'NOVA')
 
 
 class TestBigSwitchProxyNetworksV2(test_plugin.TestNetworksV2,

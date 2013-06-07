@@ -19,6 +19,7 @@
 #
 
 import os
+import copy
 
 from mock import patch
 from oslo.config import cfg
@@ -30,6 +31,7 @@ from quantum.manager import QuantumManager
 from quantum.openstack.common.notifier import api as notifier_api
 from quantum.openstack.common.notifier import test_notifier
 from quantum.tests.unit import test_l3_plugin
+from quantum.plugins.bigswitch.extensions import routerrule
 
 
 def new_L3_setUp(self):
@@ -39,7 +41,7 @@ def new_L3_setUp(self):
     rp_conf_file = os.path.join(etc_path, 'restproxy.ini.test')
     test_config['config_files'] = [rp_conf_file]
     cfg.CONF.set_default('allow_overlapping_ips', False)
-    ext_mgr = L3TestExtensionManager()
+    ext_mgr = RouterRulesTestExtensionManager()
     test_config['extension_manager'] = ext_mgr
     super(test_l3_plugin.L3NatTestCaseBase, self).setUp()
 
@@ -78,9 +80,11 @@ class HTTPConnectionMock():
         pass
 
 
-class L3TestExtensionManager(object):
+class RouterRulesTestExtensionManager(object):
 
     def get_resources(self):
+        l3.RESOURCE_ATTRIBUTE_MAP['routers'].update(
+            routerrule.EXTENDED_ATTRIBUTES_2_0['routers'])
         return l3.L3.get_resources()
 
     def get_actions(self):
@@ -156,7 +160,7 @@ class RouterDBTestCase(test_l3_plugin.L3NatDBTestCase):
         with self.subnet(cidr='10.0.10.0/24') as public_sub:
             self._set_net_external(public_sub['subnet']['network_id'])
             with self.port() as private_port:
-                with self.router() as r:
+                with self.router():
                     res = self._create_floatingip(
                         'json',
                         public_sub['subnet']['network_id'],
@@ -226,7 +230,7 @@ class RouterDBTestCase(test_l3_plugin.L3NatDBTestCase):
 
     def test_router_remove_interface_wrong_port_returns_404(self):
         with self.router() as r:
-            with self.subnet(cidr='10.0.10.0/24') as s:
+            with self.subnet(cidr='10.0.10.0/24'):
                 with self.port(no_delete=True) as p:
                     self._router_interface_action('add',
                                                   r['router']['id'],
@@ -315,3 +319,128 @@ class RouterDBTestCase(test_l3_plugin.L3NatDBTestCase):
                                                       None)
                         self._show('ports', r1_port_id,
                                    expected_code=exc.HTTPNotFound.code)
+
+    def test_router_rules_update(self):
+        with self.router() as r:
+            r_id = r['router']['id']
+            router_rules = [{'destination': '1.2.3.4/32',
+                             'source': '4.3.2.1/32',
+                             'action': 'permit',
+                             'nexthops': ['4.4.4.4', '4.4.4.5']}]
+            body = self._update('routers', r_id,
+                                {'router': {'router_rules': router_rules}})
+
+            body = self._show('routers', r['router']['id'])
+            self.assertTrue('router_rules' in body['router'])
+            rules = body['router']['router_rules']
+            self.assertEqual(_strip_rule_ids(rules), router_rules)
+            # Try after adding another rule
+            router_rules.append({'source': 'any',
+                                 'destination': '8.8.8.8/32',
+                                 'action': 'permit', 'nexthops': []})
+            body = self._update('routers', r['router']['id'],
+                                {'router': {'router_rules': router_rules}})
+
+            body = self._show('routers', r['router']['id'])
+            self.assertTrue('router_rules' in body['router'])
+            rules = body['router']['router_rules']
+            self.assertEqual(_strip_rule_ids(rules), router_rules)
+
+    def test_router_rules_separation(self):
+        with self.router() as r1:
+            with self.router() as r2:
+                r1_id = r1['router']['id']
+                r2_id = r2['router']['id']
+                router1_rules = [{'destination': '5.6.7.8/32',
+                                 'source': '8.7.6.5/32',
+                                 'action': 'permit',
+                                 'nexthops': ['8.8.8.8', '9.9.9.9']}]
+                router2_rules = [{'destination': '1.2.3.4/32',
+                                 'source': '4.3.2.1/32',
+                                 'action': 'permit',
+                                 'nexthops': ['4.4.4.4', '4.4.4.5']}]
+                body1 = self._update('routers', r1_id,
+                                     {'router':
+                                     {'router_rules': router1_rules}})
+                body2 = self._update('routers', r2_id,
+                                     {'router':
+                                     {'router_rules': router2_rules}})
+
+                body1 = self._show('routers', r1_id)
+                body2 = self._show('routers', r2_id)
+                rules1 = body1['router']['router_rules']
+                rules2 = body2['router']['router_rules']
+                self.assertEqual(_strip_rule_ids(rules1), router1_rules)
+                self.assertEqual(_strip_rule_ids(rules2), router2_rules)
+
+    def test_router_rules_validation(self):
+        with self.router() as r:
+            r_id = r['router']['id']
+            good_rules = [{'destination': '1.2.3.4/32',
+                           'source': '4.3.2.1/32',
+                           'action': 'permit',
+                           'nexthops': ['4.4.4.4', '4.4.4.5']}]
+
+            body = self._update('routers', r_id,
+                                {'router': {'router_rules': good_rules}})
+            body = self._show('routers', r_id)
+            self.assertTrue('router_rules' in body['router'])
+            self.assertEqual(good_rules,
+                             _strip_rule_ids(body['router']['router_rules']))
+            # bad CIDR
+            bad_rules = copy.deepcopy(good_rules)
+            bad_rules[0]['destination'] = '1.1.1.1'
+            body = self._update('routers', r_id,
+                                {'router': {'router_rules': bad_rules}},
+                                expected_code=exc.HTTPBadRequest.code)
+            # bad next hop
+            bad_rules = copy.deepcopy(good_rules)
+            bad_rules[0]['nexthops'] = ['1.1.1.1', 'f2']
+            body = self._update('routers', r_id,
+                                {'router': {'router_rules': bad_rules}},
+                                expected_code=exc.HTTPBadRequest.code)
+            # bad action
+            bad_rules = copy.deepcopy(good_rules)
+            bad_rules[0]['action'] = 'dance'
+            body = self._update('routers', r_id,
+                                {'router': {'router_rules': bad_rules}},
+                                expected_code=exc.HTTPBadRequest.code)
+            # make sure good rules persisted during bad updates
+            body = self._show('routers', r_id)
+            self.assertTrue('router_rules' in body['router'])
+            self.assertEqual(good_rules,
+                             _strip_rule_ids(body['router']['router_rules']))
+
+    def test_router_rules_config_change(self):
+        cfg.CONF.set_override('tenant_default_routerrules',
+                              '*:any:any:deny;*:8.8.8.8/32:any:permit:1.2.3.4',
+                              'ROUTER')
+        with self.router() as r:
+            body = self._show('routers', r['router']['id'])
+            expected_rules = [{'source': 'any', 'destination': 'any',
+                               'nexthops': [], 'action': 'deny'},
+                              {'source': '8.8.8.8/32', 'destination': 'any',
+                               'nexthops': ['1.2.3.4'], 'action': 'permit'}]
+            self.assertEqual(expected_rules,
+                             _strip_rule_ids(body['router']['router_rules']))
+
+    def test_rule_exhaustion(self):
+        cfg.CONF.set_override('max_router_rules', 10, 'ROUTER')
+        with self.router() as r:
+            rules = []
+            for i in xrange(1, 12):
+                rule = {'source': 'any', 'nexthops': [],
+                        'destination': '1.1.1.' + str(i) + '/32',
+                        'action': 'permit'}
+                rules.append(rule)
+            self._update('routers', r['router']['id'],
+                         {'router': {'router_rules': rules}},
+                         expected_code=exc.HTTPBadRequest.code)
+
+
+def _strip_rule_ids(rules):
+    cleaned = []
+    for rule in rules:
+        del(rule['id'])
+        cleaned.append(rule)
+    return cleaned

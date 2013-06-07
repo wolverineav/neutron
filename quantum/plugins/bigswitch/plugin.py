@@ -18,7 +18,7 @@
 # @author: Sumit Naiksatam, sumitnaiksatam@gmail.com, Big Switch Networks, Inc.
 
 """
-Quantum REST Proxy Plug-in for Big Switch and FloodLight Controllers
+Quantum REST Proxy Plug-in for Big Switch and FloodLight Controllers.
 
 QuantumRestProxy provides a generic quantum plugin that translates all plugin
 function calls to equivalent authenticated REST calls to a set of redundant
@@ -69,20 +69,38 @@ from quantum.openstack.common import lockutils
 from quantum.openstack.common import log as logging
 from quantum.openstack.common import rpc
 from quantum.plugins.bigswitch.version import version_string_with_vcs
+from quantum.plugins.bigswitch import routerrule_db
 from quantum import policy
 
 
 LOG = logging.getLogger(__name__)
 
+# Include the BigSwitch Extensions path in the api_extensions
+EXTENSIONS_PATH = 'quantum/plugins/bigswitch/extensions'
+if not cfg.CONF.api_extensions_path:
+    cfg.CONF.set_override('api_extensions_path',
+                          EXTENSIONS_PATH)
+else:
+    extensions = cfg.CONF.api_extensions_path.split(':')
+    if not EXTENSIONS_PATH in extensions:
+        extensions.append(EXTENSIONS_PATH)
+        cfg.CONF.set_override('api_extensions_path',
+                              ':'.join(extensions))
 
 restproxy_opts = [
     cfg.StrOpt('servers', default='localhost:8800',
-               help=_("A comma separated list of servers and port numbers "
-                      "to proxy request to.")),
+               help=_("A comma separated list of BigSwitch or Floodlight "
+                      "servers and port numbers. The plugin proxies the "
+                      "requests to the BigSwitch/Floodlight server, "
+                      "which performs the networking configuration. Note that "
+                      "only one server is needed per deployment, but you may "
+                      "wish to deploy multiple servers to support failover.")),
     cfg.StrOpt('server_auth', default='username:password', secret=True,
-               help=_("Server authentication")),
+               help=_("The username and password for authenticating against "
+                      " the BigSwitch or Floodlight controller.")),
     cfg.BoolOpt('server_ssl', default=False,
-                help=_("Use SSL to connect")),
+                help=_("If True, Use SSL when connecting to the BigSwitch or "
+                       "Floodlight controller.")),
     cfg.BoolOpt('sync_data', default=False,
                 help=_("Sync data on connect")),
     cfg.IntOpt('server_timeout', default=10,
@@ -98,6 +116,17 @@ restproxy_opts = [
 
 cfg.CONF.register_opts(restproxy_opts, "RESTPROXY")
 
+router_opts = [
+    cfg.StrOpt('tenant_default_routerrules', default='*:any:any:permit;',
+               help=_("The default router rules installed in new "
+                      "tenant routers. Rules are separated by semi-colons. "
+                      "Format is <tenant>:<source>:<destination>:<action>"
+                      " Use an * to specify default for all tenants.")),
+    cfg.IntOpt('max_router_rules', default=200,
+               help=_("Maximum number of router rules")),
+]
+
+cfg.CONF.register_opts(router_opts, "ROUTER")
 
 nova_opts = [
     cfg.StrOpt('vif_type', default='ovs',
@@ -127,6 +156,7 @@ METADATA_SERVER_IP = '169.254.169.254'
 
 
 class RemoteRestError(exceptions.QuantumException):
+
     def __init__(self, message):
         if message is None:
             message = "None"
@@ -171,7 +201,8 @@ class ServerProxy(object):
                   {'server': self.server, 'port': self.port, 'ssl': self.ssl,
                    'action': action})
         LOG.debug(_("ServerProxy: resource=%(resource)s, data=%(data)r, "
-                    "headers=%(headers)r"), locals())
+                    "headers=%(headers)r"),
+                  {'resource': resource, 'data': data, 'headers': headers})
 
         conn = None
         if self.ssl:
@@ -202,7 +233,8 @@ class ServerProxy(object):
                     pass
             ret = (response.status, response.reason, respstr, respdata)
         except (socket.timeout, socket.error) as e:
-            LOG.error(_('ServerProxy: %(action)s failure, %(e)r'), locals())
+            LOG.error(_('ServerProxy: %(action)s failure, %(e)r'),
+                      {'action': action, 'e': e})
             ret = 0, None, None, None
         conn.close()
         LOG.debug(_("ServerProxy: status=%(status)d, reason=%(reason)r, "
@@ -214,6 +246,7 @@ class ServerProxy(object):
 
 
 class ServerPool(object):
+
     def __init__(self, servers, ssl, auth, quantum_id, timeout=10,
                  base_uri='/quantum/v1.0', name='QuantumRestProxy'):
         self.base_uri = base_uri
@@ -232,6 +265,7 @@ class ServerPool(object):
 
     def server_failure(self, resp):
         """Define failure codes as required.
+
         Note: We assume 301-303 is a failure, and try the next server in
         the server pool.
         """
@@ -239,6 +273,7 @@ class ServerPool(object):
 
     def action_success(self, resp):
         """Defining success codes as required.
+
         Note: We assume any valid 2xx as being successful response.
         """
         return resp[0] in SUCCESS_CODES
@@ -290,10 +325,9 @@ class RpcProxy(dhcp_rpc_base.DhcpRpcCallbackMixin):
 
 
 class QuantumRestProxyV2(db_base_plugin_v2.QuantumDbPluginV2,
-                         l3_db.L3_NAT_db_mixin):
+                         routerrule_db.RouterRule_db_mixin):
 
-    supported_extension_aliases = ["router", "binding"]
-
+    supported_extension_aliases = ["router", "binding", "router_rules"]
     binding_view = "extension:port_binding:view"
     binding_set = "extension:port_binding:set"
 
@@ -341,8 +375,11 @@ class QuantumRestProxyV2(db_base_plugin_v2.QuantumDbPluginV2,
         LOG.debug(_("QuantumRestProxyV2: initialization done"))
 
     def create_network(self, context, network):
-        """Create a network, which represents an L2 network segment which
-        can have a set of subnets and ports associated with it.
+        """Create a network.
+
+        Network represents an L2 network segment which can have a set of
+        subnets and ports associated with it.
+
         :param context: quantum api request context
         :param network: dictionary describing the network
 
@@ -361,7 +398,6 @@ class QuantumRestProxyV2(db_base_plugin_v2.QuantumDbPluginV2,
 
         :raises: RemoteRestError
         """
-
         LOG.debug(_("QuantumRestProxyV2: create_network() called"))
 
         self._warn_on_state_status(network['network'])
@@ -399,6 +435,7 @@ class QuantumRestProxyV2(db_base_plugin_v2.QuantumDbPluginV2,
 
     def update_network(self, context, net_id, network):
         """Updates the properties of a particular Virtual Network.
+
         :param context: quantum api request context
         :param net_id: uuid of the network to update
         :param network: dictionary describing the updates
@@ -419,7 +456,6 @@ class QuantumRestProxyV2(db_base_plugin_v2.QuantumDbPluginV2,
         :raises: exceptions.NetworkNotFound
         :raises: RemoteRestError
         """
-
         LOG.debug(_("QuantumRestProxyV2.update_network() called"))
 
         self._warn_on_state_status(network['network'])
@@ -601,6 +637,7 @@ class QuantumRestProxyV2(db_base_plugin_v2.QuantumDbPluginV2,
 
     def update_port(self, context, port_id, port):
         """Update values of a port.
+
         :param context: quantum api request context
         :param id: UUID representing the port to update.
         :param port: dictionary with keys indicating fields to update.
@@ -670,6 +707,7 @@ class QuantumRestProxyV2(db_base_plugin_v2.QuantumDbPluginV2,
 
     def delete_port(self, context, port_id, l3_port_check=True):
         """Delete a port.
+
         :param context: quantum api request context
         :param id: UUID representing the port to delete.
 
@@ -678,7 +716,6 @@ class QuantumRestProxyV2(db_base_plugin_v2.QuantumDbPluginV2,
         :raises: exceptions.NetworkNotFound
         :raises: RemoteRestError
         """
-
         LOG.debug(_("QuantumRestProxyV2: delete_port() called"))
 
         # if needed, check to see if this is a port owned by
@@ -714,8 +751,10 @@ class QuantumRestProxyV2(db_base_plugin_v2.QuantumDbPluginV2,
 
     def _plug_interface(self, context, tenant_id, net_id, port_id,
                         remote_interface_id):
-        """Attaches a remote interface to the specified port on the
-        specified Virtual Network.
+        """Plug remote interface to the network.
+
+        Attaches a remote interface to the specified port on the specified
+        Virtual Network.
 
         :returns: None
 
@@ -746,8 +785,10 @@ class QuantumRestProxyV2(db_base_plugin_v2.QuantumDbPluginV2,
             raise
 
     def _unplug_interface(self, context, tenant_id, net_id, port_id):
-        """Detaches a remote interface from the specified port on the
-        network controller
+        """Detach interface from the network controller.
+
+        Detaches a remote interface from the specified port on the network
+        controller.
 
         :returns: None
 
@@ -779,7 +820,7 @@ class QuantumRestProxyV2(db_base_plugin_v2.QuantumDbPluginV2,
         # update network on network controller
         try:
             self._send_update_network(orig_net)
-        except RemoteRestError as e:
+        except RemoteRestError:
             # rollback creation of subnet
             super(QuantumRestProxyV2, self).delete_subnet(context,
                                                           subnet['id'])
@@ -802,7 +843,7 @@ class QuantumRestProxyV2(db_base_plugin_v2.QuantumDbPluginV2,
         # update network on network controller
         try:
             self._send_update_network(orig_net)
-        except RemoteRestError as e:
+        except RemoteRestError:
             # rollback updation of subnet
             super(QuantumRestProxyV2, self).update_subnet(context, id,
                                                           orig_subnet)
@@ -820,9 +861,36 @@ class QuantumRestProxyV2(db_base_plugin_v2.QuantumDbPluginV2,
         # update network on network controller
         try:
             self._send_update_network(orig_net)
-        except RemoteRestError as e:
-            # TODO (Sumit): rollback deletion of subnet
+        except RemoteRestError:
+            # TODO(Sumit): rollback deletion of subnet
             raise
+
+    def _get_tenant_default_routerrules(self, tenant):
+        config = cfg.CONF.ROUTER.tenant_default_routerrules
+        defaultset = []
+        tenantset = []
+        rules = config.split(';')
+        for rule in rules:
+            items = rule.split(':')
+            if len(items) == 5:
+                (tenantid, source, destination, action, nexthops) = items
+            elif len(items) == 4:
+                (tenantid, source, destination, action) = items
+                nexthops = ''
+            else:
+                continue
+            parsedrule = {'source': source,
+                          'destination': destination, 'action': action,
+                          'nexthops': nexthops.split(',')}
+            if parsedrule['nexthops'][0] == '':
+                parsedrule['nexthops'] = []
+            if tenantid == '*':
+                defaultset.append(parsedrule)
+            if tenantid == tenant:
+                tenantset.append(parsedrule)
+        if len(tenantset) > 0:
+            return tenantset
+        return defaultset
 
     def create_router(self, context, router):
         LOG.debug(_("QuantumRestProxyV2: create_router() called"))
@@ -830,6 +898,10 @@ class QuantumRestProxyV2(db_base_plugin_v2.QuantumDbPluginV2,
         self._warn_on_state_status(router['router'])
 
         tenant_id = self._get_tenant_id_for_create(context, router["router"])
+
+        # set default router rules
+        router['router']['router_rules'] = \
+            self._get_tenant_default_routerrules(tenant_id)
 
         # create router in DB
         new_router = super(QuantumRestProxyV2, self).create_router(context,
@@ -1046,7 +1118,7 @@ class QuantumRestProxyV2(db_base_plugin_v2.QuantumDbPluginV2,
         # update network on network controller
         try:
             self._send_update_network(orig_net)
-        except RemoteRestError as e:
+        except RemoteRestError:
             # rollback updation of subnet
             super(QuantumRestProxyV2, self).update_floatingip(context, id,
                                                               orig_fl_ip)
@@ -1067,13 +1139,14 @@ class QuantumRestProxyV2(db_base_plugin_v2.QuantumDbPluginV2,
         # update network on network controller
         try:
             self._send_update_network(orig_net)
-        except RemoteRestError as e:
+        except RemoteRestError:
             # TODO(Sumit): rollback deletion of floating IP
             raise
 
     def _send_all_data(self):
-        """Pushes all data to network ctrl (networks/ports, ports/attachments)
-        to give the controller an option to re-sync it's persistent store
+        """Pushes all data to network ctrl (networks/ports, ports/attachments).
+
+        This gives the controller an option to re-sync it's persistent store
         with quantum's current view of that data.
         """
         admin_context = qcontext.get_admin_context()

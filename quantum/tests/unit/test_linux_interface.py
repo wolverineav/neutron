@@ -449,7 +449,7 @@ class TestIVSInterfaceDriver(TestBase):
         expected = [mock.call('sudo'), mock.call().add_veth('tap0', devname),
                     mock.call().device(devname)]
 
-        ivsctl_cmd = ['ivs-ctl', 'add-port', bridge, 'tap0']
+        ivsctl_cmd = ['ivs-ctl', 'add-port', 'tap0']
 
         with mock.patch.object(utils, 'execute') as execute:
             ivs.plug('01234567-1234-1234-99',

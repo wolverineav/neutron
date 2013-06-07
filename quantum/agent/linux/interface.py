@@ -228,7 +228,7 @@ class IVSInterfaceDriver(LinuxInterfaceDriver):
 
     def _ovs_add_port(self, bridge, device_name, port_id, mac_address):
         bridge = 'indigo'  # IVS has one bridge
-        cmd = ['ivs-ctl', 'add-port', bridge, device_name]
+        cmd = ['ivs-ctl', 'add-port', device_name]
         utils.execute(cmd, self.root_helper)
 
     def plug(self, network_id, port_id, device_name, mac_address,

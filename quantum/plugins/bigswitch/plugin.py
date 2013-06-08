@@ -916,7 +916,10 @@ class QuantumRestProxyV2(db_base_plugin_v2.QuantumDbPluginV2,
             }
             ret = self.servers.post(resource, data)
             if not self.servers.action_success(ret):
-                raise RemoteRestError(ret[2])
+                del data['router']['router_rules']
+                ret = self.servers.post(resource, data)
+                if not self.servers.action_success(ret):
+                    raise RemoteRestError(ret[2])
         except RemoteRestError as e:
             LOG.error(_("QuantumRestProxyV2: Unable to create remote router: "
                         "%s"), e.message)
@@ -949,7 +952,10 @@ class QuantumRestProxyV2(db_base_plugin_v2.QuantumDbPluginV2,
             }
             ret = self.servers.put(resource, data)
             if not self.servers.action_success(ret):
-                raise RemoteRestError(ret[2])
+                del data['router']['router_rules']
+                ret = self.servers.post(resource, data)
+                if not self.servers.action_success(ret):
+                    raise RemoteRestError(ret[2])
         except RemoteRestError as e:
             LOG.error(_("QuantumRestProxyV2: Unable to update remote router: "
                         "%s"), e.message)

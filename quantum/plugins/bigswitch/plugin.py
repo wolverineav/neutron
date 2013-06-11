@@ -76,16 +76,10 @@ from quantum import policy
 LOG = logging.getLogger(__name__)
 
 # Include the BigSwitch Extensions path in the api_extensions
-EXTENSIONS_PATH = 'quantum/plugins/bigswitch/extensions'
+EXTENSIONS_PATH = os.path.join(os.path.dirname(__file__), './extensions')
 if not cfg.CONF.api_extensions_path:
-    cfg.CONF.set_override('api_extensions_path',
-                          EXTENSIONS_PATH)
-else:
-    extensions = cfg.CONF.api_extensions_path.split(':')
-    if not EXTENSIONS_PATH in extensions:
-        extensions.append(EXTENSIONS_PATH)
-        cfg.CONF.set_override('api_extensions_path',
-                              ':'.join(extensions))
+	    cfg.CONF.set_override('api_extensions_path',
+	                          EXTENSIONS_PATH)
 
 restproxy_opts = [
     cfg.StrOpt('servers', default='localhost:8800',

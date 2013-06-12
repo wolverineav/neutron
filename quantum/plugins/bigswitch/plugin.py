@@ -48,6 +48,7 @@ import base64
 import copy
 import httplib
 import json
+import os
 import socket
 
 from oslo.config import cfg

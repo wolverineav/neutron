@@ -35,53 +35,73 @@ class RulesExhausted(qexception.BadRequest):
                 "The number of rules exceeds the maximum %(quota)s.")
 
 
-# Validates and converts router rules to the appropriate data structure
 def convert_to_valid_router_rules(data):
+    """
+    Validates and converts router rules to the appropriate data structure
+    """
     if not isinstance(data, list):
-        msg = _("Invalid data format for router rule: '%s'") % data
-        LOG.debug(msg)
-        raise qexception.InvalidInput(error_message=msg)
+        emsg = _("Invalid data format for router rule: '%s'") % data
+        LOG.debug(emsg)
+        raise qexception.InvalidInput(error_message=emsg)
+    _validate_uniquerules(data)
     rules = []
     expected_keys = ['source', 'destination', 'action']
     for rule in data:
-        msg = attr._verify_dict_keys(expected_keys, rule)
-        if msg:
-            msg = attr._verify_dict_keys(expected_keys + ['nexthops'], rule)
-        if msg:
-            LOG.debug(msg)
-            raise qexception.InvalidInput(error_message=msg)
-        msg = attr._validate_subnet(rule['destination'])
-        if msg and not rule['destination'] == 'any':
-            LOG.debug(msg)
-            raise qexception.InvalidInput(error_message=msg)
-        msg = attr._validate_subnet(rule['source'])
-        if msg and not rule['source'] == 'any':
-            LOG.debug(msg)
-            raise qexception.InvalidInput(error_message=msg)
         try:
             if not isinstance(rule['nexthops'], list):
                 rule['nexthops'] = rule['nexthops'].split('+')
         except KeyError:
             rule['nexthops'] = []
-        for ip in rule['nexthops']:
-            msg = attr._validate_ip_address(ip)
-            if msg:
-                LOG.debug(msg)
-                raise qexception.InvalidInput(error_message=msg)
-        if (not rule['action'] == 'permit' and not rule['action'] == 'deny'):
-            msg = _("Action must be either permit or deny."
-                    " '%s' was provided") % rule['action']
-            LOG.debug(msg)
-            raise qexception.InvalidInput(error_message=msg)
-        if rule in rules:
-            msg = _("Duplicate router rule '%s'") % rule
-            LOG.debug(msg)
-            raise qexception.InvalidInput(error_message=msg)
+        src = rule['source']
+        if rule['source'] == 'any':
+            src = '0.0.0.0/0'
+        dst = rule['destination']
+        if rule['destination'] == 'any':
+            dst = '0.0.0.0/0'
+
+        errors = [msg for msg in
+                  [attr._verify_dict_keys(expected_keys, rule, False),
+                   attr._validate_subnet(dst),
+                   attr._validate_subnet(src),
+                   _validate_nexthops(rule['nexthops']),
+                   _validate_action(rule['action'])] if msg]
+        if errors:
+            LOG.debug(errors)
+            raise qexception.InvalidInput(error_message=errors)
         rules.append(rule)
     return rules
 
 
-class Routerrule():
+def _validate_nexthops(nexthops):
+    for ip in nexthops:
+        msg = attr._validate_ip_address(ip)
+        if msg:
+            return msg
+
+
+def _validate_action(action):
+    if action not in ['permit', 'deny']:
+        return _("Action must be either permit or deny."
+                 " '%s' was provided") % action
+
+
+def _validate_uniquerules(rules):
+    pairs = []
+    for r in rules:
+        if 'source' not in r or 'destination' not in r:
+            continue
+        pairs.append((r['source'], r['destination']))
+    pairs.sort(key=lambda x: (x[0], x[1]))
+    for i, p in enumerate(pairs):
+        if i == 0:
+            continue
+        if p == pairs[i - 1]:
+            error = _("Duplicate router rule (src,dst) '%s'") % str(p)
+            LOG.debug(error)
+            raise qexception.InvalidInput(error_message=error)
+
+
+class Routerrule(object):
 
     @classmethod
     def get_name(cls):

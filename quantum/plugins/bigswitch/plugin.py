@@ -79,8 +79,8 @@ LOG = logging.getLogger(__name__)
 # Include the BigSwitch Extensions path in the api_extensions
 EXTENSIONS_PATH = os.path.join(os.path.dirname(__file__), './extensions')
 if not cfg.CONF.api_extensions_path:
-	    cfg.CONF.set_override('api_extensions_path',
-	                          EXTENSIONS_PATH)
+    cfg.CONF.set_override('api_extensions_path',
+                          EXTENSIONS_PATH)
 
 restproxy_opts = [
     cfg.StrOpt('servers', default='localhost:8800',
@@ -572,12 +572,9 @@ class QuantumRestProxyV2(db_base_plugin_v2.QuantumDbPluginV2,
 
         # Update DB
         port["port"]["admin_state_up"] = False
-        net_id = port["port"]["network_id"]
-        net = super(QuantumRestProxyV2, self).get_network(context, net_id)
-        tenant_id = net["tenant_id"]
-        if not port["port"]["tenant_id"]:
-            port["port"]["tenant_id"] = tenant_id
         new_port = super(QuantumRestProxyV2, self).create_port(context, port)
+        net = super(QuantumRestProxyV2,
+                    self).get_network(context, new_port["network_id"])
 
         if self.add_meta_server_route:
             if new_port['device_owner'] == 'network:dhcp':
@@ -586,7 +583,7 @@ class QuantumRestProxyV2(db_base_plugin_v2.QuantumDbPluginV2,
 
         # create on networl ctrl
         try:
-            resource = PORT_RESOURCE_PATH % (tenant_id, net_id)
+            resource = PORT_RESOURCE_PATH % (net["tenant_id"], net["id"])
             mapped_port = self._map_state_and_status(new_port)
             data = {
                 "port": mapped_port
@@ -724,17 +721,22 @@ class QuantumRestProxyV2(db_base_plugin_v2.QuantumDbPluginV2,
     def _delete_port(self, context, port_id):
         # Delete from DB
         port = super(QuantumRestProxyV2, self).get_port(context, port_id)
+        tenant_id = port['tenant_id']
+        if tenant_id == '':
+            net = super(QuantumRestProxyV2,
+                        self).get_network(context, port['network_id'])
+            tenant_id = net['tenant_id']
 
         # delete from network ctrl. Remote error on delete is ignored
         try:
-            resource = PORTS_PATH % (port["tenant_id"], port["network_id"],
+            resource = PORTS_PATH % (tenant_id, port["network_id"],
                                      port_id)
             ret = self.servers.delete(resource)
             if not self.servers.action_success(ret):
                 raise RemoteRestError(ret[2])
 
             if port.get("device_id"):
-                self._unplug_interface(context, port["tenant_id"],
+                self._unplug_interface(context, tenant_id,
                                        port["network_id"], port["id"])
             ret_val = super(QuantumRestProxyV2, self)._delete_port(context,
                                                                    port_id)

@@ -77,7 +77,7 @@ from quantum import policy
 LOG = logging.getLogger(__name__)
 
 # Include the BigSwitch Extensions path in the api_extensions
-EXTENSIONS_PATH = os.path.join(os.path.dirname(__file__), './extensions')
+EXTENSIONS_PATH = os.path.join(os.path.dirname(__file__), 'extensions')
 if not cfg.CONF.api_extensions_path:
     cfg.CONF.set_override('api_extensions_path',
                           EXTENSIONS_PATH)
@@ -112,11 +112,11 @@ restproxy_opts = [
 cfg.CONF.register_opts(restproxy_opts, "RESTPROXY")
 
 router_opts = [
-    cfg.StrOpt('tenant_default_routerrules', default='*:any:any:permit;',
-               help=_("The default router rules installed in new "
-                      "tenant routers. Rules are separated by semi-colons. "
-                      "Format is <tenant>:<source>:<destination>:<action>"
-                      " Use an * to specify default for all tenants.")),
+    cfg.MultiStrOpt('tenant_default_router_rule', default=['*:any:any:permit'],
+                    help=_("The default router rules installed in new tenant "
+                           "routers. Repeat the config option for each rule. "
+                           "Format is <tenant>:<source>:<destination>:<action>"
+                           " Use an * to specify default for all tenants.")),
     cfg.IntOpt('max_router_rules', default=200,
                help=_("Maximum number of router rules")),
 ]
@@ -862,11 +862,10 @@ class QuantumRestProxyV2(db_base_plugin_v2.QuantumDbPluginV2,
             # TODO(Sumit): rollback deletion of subnet
             raise
 
-    def _get_tenant_default_routerrules(self, tenant):
-        config = cfg.CONF.ROUTER.tenant_default_routerrules
+    def _get_tenant_default_router_rules(self, tenant):
+        rules = cfg.CONF.ROUTER.tenant_default_router_rule
         defaultset = []
         tenantset = []
-        rules = config.split(';')
         for rule in rules:
             items = rule.split(':')
             if len(items) == 5:
@@ -885,7 +884,7 @@ class QuantumRestProxyV2(db_base_plugin_v2.QuantumDbPluginV2,
                 defaultset.append(parsedrule)
             if tenantid == tenant:
                 tenantset.append(parsedrule)
-        if len(tenantset) > 0:
+        if tenantset:
             return tenantset
         return defaultset
 
@@ -897,8 +896,8 @@ class QuantumRestProxyV2(db_base_plugin_v2.QuantumDbPluginV2,
         tenant_id = self._get_tenant_id_for_create(context, router["router"])
 
         # set default router rules
-        router['router']['router_rules'] = \
-            self._get_tenant_default_routerrules(tenant_id)
+        rules = self._get_tenant_default_router_rules(tenant_id)
+        router['router']['router_rules'] = rules
 
         # create router in DB
         new_router = super(QuantumRestProxyV2, self).create_router(context,
@@ -913,10 +912,7 @@ class QuantumRestProxyV2(db_base_plugin_v2.QuantumDbPluginV2,
             }
             ret = self.servers.post(resource, data)
             if not self.servers.action_success(ret):
-                del data['router']['router_rules']
-                ret = self.servers.post(resource, data)
-                if not self.servers.action_success(ret):
-                    raise RemoteRestError(ret[2])
+                raise RemoteRestError(ret[2])
         except RemoteRestError as e:
             LOG.error(_("QuantumRestProxyV2: Unable to create remote router: "
                         "%s"), e.message)
@@ -949,10 +945,7 @@ class QuantumRestProxyV2(db_base_plugin_v2.QuantumDbPluginV2,
             }
             ret = self.servers.put(resource, data)
             if not self.servers.action_success(ret):
-                del data['router']['router_rules']
-                ret = self.servers.post(resource, data)
-                if not self.servers.action_success(ret):
-                    raise RemoteRestError(ret[2])
+                raise RemoteRestError(ret[2])
         except RemoteRestError as e:
             LOG.error(_("QuantumRestProxyV2: Unable to update remote router: "
                         "%s"), e.message)
@@ -1345,17 +1338,16 @@ class QuantumRestProxyV2(db_base_plugin_v2.QuantumDbPluginV2,
 
     def _extend_port_dict_binding(self, context, port):
         if self._check_view_auth(context, port, self.binding_view):
-            cfg_vif_type = cfg.CONF.NOVA.vif_type
-            if cfg_vif_type.lower() == 'ovs':
-                port[portbindings.VIF_TYPE] = portbindings.VIF_TYPE_OVS
-            elif cfg_vif_type.lower() == 'ivs':
-                port[portbindings.VIF_TYPE] = portbindings.VIF_TYPE_IVS
-            else:
-                port[portbindings.VIF_TYPE] = portbindings.VIF_TYPE_OVS
+            cfg_vif_type = cfg.CONF.NOVA.vif_type.lower()
+            if not cfg_vif_type in (portbindings.VIF_TYPE_OVS,
+                                    portbindings.VIF_TYPE_IVS):
                 LOG.warning(_("Unrecognized vif_type in configuration "
                               "[%s]. Defaulting to ovs. "),
                             cfg_vif_type)
+                cfg_vif_type = portbindings.VIF_TYPE_OVS
+
+            port[portbindings.VIF_TYPE] = cfg_vif_type
             port[portbindings.CAPABILITIES] = {
-                portbindings.CAP_PORT_FILTER:
-                'security-group' in self.supported_extension_aliases}
+                    portbindings.CAP_PORT_FILTER:
+                    'security-group' in self.supported_extension_aliases}
         return port

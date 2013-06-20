@@ -412,8 +412,9 @@ class RouterDBTestCase(test_l3_plugin.L3NatDBTestCase):
                              _strip_rule_ids(body['router']['router_rules']))
 
     def test_router_rules_config_change(self):
-        cfg.CONF.set_override('tenant_default_routerrules',
-                              '*:any:any:deny;*:8.8.8.8/32:any:permit:1.2.3.4',
+        cfg.CONF.set_override('tenant_default_router_rule',
+                              ['*:any:any:deny',
+                               '*:8.8.8.8/32:any:permit:1.2.3.4'],
                               'ROUTER')
         with self.router() as r:
             body = self._show('routers', r['router']['id'])

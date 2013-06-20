@@ -1436,28 +1436,38 @@ class NvpPluginV2(db_base_plugin_v2.QuantumDbPluginV2,
             LOG.debug(_("Update port request: %s"), port)
             nvp_port_id = self._nvp_get_port_id(
                 context, self.default_cluster, ret_port)
-            nvplib.update_port(self.default_cluster,
-                               ret_port['network_id'],
-                               nvp_port_id, id, tenant_id,
-                               ret_port['name'], ret_port['device_id'],
-                               ret_port['admin_state_up'],
-                               ret_port['mac_address'],
-                               ret_port['fixed_ips'],
-                               ret_port[psec.PORTSECURITY],
-                               ret_port[ext_sg.SECURITYGROUPS],
-                               ret_port[ext_qos.QUEUE])
+            if nvp_port_id:
+                try:
+                    nvplib.update_port(self.default_cluster,
+                                       ret_port['network_id'],
+                                       nvp_port_id, id, tenant_id,
+                                       ret_port['name'], ret_port['device_id'],
+                                       ret_port['admin_state_up'],
+                                       ret_port['mac_address'],
+                                       ret_port['fixed_ips'],
+                                       ret_port[psec.PORTSECURITY],
+                                       ret_port[ext_sg.SECURITYGROUPS],
+                                       ret_port[ext_qos.QUEUE])
+
+                    # Update the port status from nvp. If we fail here hide it
+                    # since the port was successfully updated but we were not
+                    # able to retrieve the status.
+                    ret_port['status'] = nvplib.get_port_status(
+                        self.default_cluster, ret_port['network_id'],
+                        nvp_port_id)
+                # FIXME(arosen) improve exception handling.
+                except Exception:
+                    ret_port['status'] = constants.PORT_STATUS_ERROR
+                    LOG.exception(_("Unable to update port id: %s."),
+                                  nvp_port_id)
+
+            # If nvp_port_id is not in database or in nvp put in error state.
+            else:
+                ret_port['status'] = constants.PORT_STATUS_ERROR
 
             # remove since it will be added in extend based on policy
             del ret_port[ext_qos.QUEUE]
             self._extend_port_qos_queue(context, ret_port)
-        # Update the port status from nvp. If we fail here hide it since
-        # the port was successfully updated but we were not able to retrieve
-        # the status.
-        try:
-            ret_port['status'] = nvplib.get_port_status(
-                self.default_cluster, ret_port['network_id'], nvp_port_id)
-        except:
-            LOG.warn(_("Unable to retrieve port status for:%s."), nvp_port_id)
         return ret_port
 
     def delete_port(self, context, id, l3_port_check=True,
@@ -2040,6 +2050,9 @@ class NvpPluginV2(db_base_plugin_v2.QuantumDbPluginV2,
         except sa_exc.NoResultFound:
             LOG.debug(_("The port '%s' is not associated with floating IPs"),
                       port_id)
+        except q_exc.NotFound:
+            LOG.warning(_("Nat rules not found in nvp for port: %s"), id)
+
         super(NvpPluginV2, self).disassociate_floatingips(context, port_id)
 
     def create_network_gateway(self, context, network_gateway):
@@ -2138,7 +2151,7 @@ class NvpPluginV2(db_base_plugin_v2.QuantumDbPluginV2,
             if not security_group:
                 raise ext_sg.SecurityGroupNotFound(id=security_group_id)
 
-            if security_group['name'] == 'default':
+            if security_group['name'] == 'default' and not context.is_admin:
                 raise ext_sg.SecurityGroupCannotRemoveDefault()
 
             filters = {'security_group_id': [security_group['id']]}

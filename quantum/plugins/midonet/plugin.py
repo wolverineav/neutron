@@ -1018,7 +1018,7 @@ class MidonetPluginV2(db_base_plugin_v2.QuantumDbPluginV2,
             sg_id = sg_db_entry['id']
             tenant_id = sg_db_entry['tenant_id']
 
-            if sg_name == 'default':
+            if sg_name == 'default' and not context.is_admin:
                 raise ext_sg.SecurityGroupCannotRemoveDefault()
 
             filters = {'security_group_id': [sg_id]}
@@ -1033,12 +1033,13 @@ class MidonetPluginV2(db_base_plugin_v2.QuantumDbPluginV2,
             return super(MidonetPluginV2, self).delete_security_group(
                 context, id)
 
-    def get_security_groups(self, context, filters=None, fields=None):
+    def get_security_groups(self, context, filters=None, fields=None,
+                            default_sg=False):
         LOG.debug(_("MidonetPluginV2.get_security_groups called: "
                     "filters=%(filters)r fields=%(fields)r"),
                   {'filters': filters, 'fields': fields})
         return super(MidonetPluginV2, self).get_security_groups(
-            context, filters, fields)
+            context, filters, fields, default_sg=default_sg)
 
     def get_security_group(self, context, id, fields=None, tenant_id=None):
         LOG.debug(_("MidonetPluginV2.get_security_group called: id=%(id)s "

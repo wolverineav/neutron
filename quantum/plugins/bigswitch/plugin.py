@@ -188,7 +188,6 @@ class ServerProxy(object):
         if auth:
             self.auth = 'Basic ' + base64.encodestring(auth).strip()
 
-    @lockutils.synchronized('rest_call', 'bsn-', external=True)
     def rest_call(self, action, resource, data, headers):
         uri = self.base_uri + resource
         body = json.dumps(data)
@@ -284,6 +283,7 @@ class ServerPool(object):
         """
         return resp[0] in SUCCESS_CODES
 
+    @lockutils.synchronized('rest_call', 'bsn-', external=True)
     def rest_call(self, action, resource, data, headers, ignore_codes):
         good_servers = [s for s in self.servers if not s.failed]
         bad_servers = [s for s in self.servers if s.failed] 

@@ -822,6 +822,7 @@ class QuantumRestProxyV2(db_base_plugin_v2.QuantumDbPluginV2,
         except RemoteRestError as e:
             LOG.error(_("QuantumRestProxyV2: Unable to update remote port: "
                         "%s"), e.message)
+            raise
 
     def create_subnet(self, context, subnet):
         LOG.debug(_("QuantumRestProxyV2: create_subnet() called"))

@@ -286,7 +286,7 @@ class ServerPool(object):
     @lockutils.synchronized('rest_call', 'bsn-', external=True)
     def rest_call(self, action, resource, data, headers, ignore_codes):
         good_servers = [s for s in self.servers if not s.failed]
-        bad_servers = [s for s in self.servers if s.failed] 
+        bad_servers = [s for s in self.servers if s.failed]
         for active_server in good_servers + bad_servers:
             ret = active_server.rest_call(action, resource, data, headers)
             if not self.server_failure(ret, ignore_codes):
@@ -1374,8 +1374,8 @@ class QuantumRestProxyV2(db_base_plugin_v2.QuantumDbPluginV2,
                     cfg_vif_type = override
             port[portbindings.VIF_TYPE] = cfg_vif_type
             port[portbindings.CAPABILITIES] = {
-                    portbindings.CAP_PORT_FILTER:
-                    'security-group' in self.supported_extension_aliases}
+                portbindings.CAP_PORT_FILTER:
+                'security-group' in self.supported_extension_aliases}
         return port
 
     def _check_hostvif_override(self, hostid):

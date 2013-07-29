@@ -183,6 +183,7 @@ class ServerProxy(object):
         self.name = name
         self.success_codes = SUCCESS_CODES
         self.auth = None
+        self.failed = False
         self.quantum_id = quantum_id
         self.failed = False
         if auth:
@@ -285,9 +286,8 @@ class ServerPool(object):
 
     @lockutils.synchronized('rest_call', 'bsn-', external=True)
     def rest_call(self, action, resource, data, headers, ignore_codes):
-        good_servers = [s for s in self.servers if not s.failed]
-        bad_servers = [s for s in self.servers if s.failed]
-        for active_server in good_servers + bad_servers:
+        good_first = sorted(self.servers, key=lambda x: x.failed)
+        for active_server in good_first:
             ret = active_server.rest_call(action, resource, data, headers)
             if not self.server_failure(ret, ignore_codes):
                 active_server.failed = False

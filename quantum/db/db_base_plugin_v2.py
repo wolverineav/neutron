@@ -344,9 +344,9 @@ class QuantumDbPluginV2(quantum_plugin_base_v2.QuantumPluginBaseV2):
                 pool_id = allocation_pool['id']
                 break
         if not pool_id:
-            error_message = _("No allocation pool found for "
-                              "ip address:%s") % ip_address
-            raise q_exc.InvalidInput(error_message=error_message)
+            QuantumDbPluginV2._delete_ip_allocation(
+                context, network_id, subnet_id, ip_address)
+            return
         # Two requests will be done on the database. The first will be to
         # search if an entry starts with ip_address + 1 (r1). The second
         # will be to see if an entry ends with ip_address -1 (r2).
@@ -1166,7 +1166,7 @@ class QuantumDbPluginV2(quantum_plugin_base_v2.QuantumPluginBaseV2):
         s['cidr'] = db_subnet.cidr
         self._validate_subnet(s)
 
-        if 'gateway_ip' in s:
+        if 'gateway_ip' in s and s['gateway_ip'] is not None:
             allocation_pools = [{'start': p['first_ip'], 'end': p['last_ip']}
                                 for p in db_subnet.allocation_pools]
             self._validate_gw_out_of_pools(s["gateway_ip"], allocation_pools)

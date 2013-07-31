@@ -1727,6 +1727,28 @@ fixed_ips=ip_address%%3D%s&fixed_ips=ip_address%%3D%s&fixed_ips=subnet_id%%3D%s
 
                 self.assertEqual(len(q.all()), 1)
 
+    def test_recycle_ip_address_without_allocation_pool(self):
+        plugin = QuantumManager.get_plugin()
+        allocation_pools = [{"start": '10.0.0.10',
+                             "end": '10.0.0.50'}]
+        with self.subnet(cidr='10.0.0.0/24',
+                         allocation_pools=allocation_pools) as subnet:
+            network_id = subnet['subnet']['network_id']
+            subnet_id = subnet['subnet']['id']
+            fixed_ips = [{"subnet_id": subnet_id,
+                          "ip_address": '10.0.0.100'}]
+            with self.port(subnet=subnet, fixed_ips=fixed_ips) as port:
+                update_context = context.Context('', port['port']['tenant_id'])
+                ip_address = port['port']['fixed_ips'][0]['ip_address']
+                plugin._recycle_ip(update_context,
+                                   network_id,
+                                   subnet_id,
+                                   ip_address)
+
+                q = update_context.session.query(models_v2.IPAllocation)
+                q = q.filter_by(subnet_id=subnet_id)
+                self.assertEqual(q.count(), 0)
+
     def test_recycle_held_ip_address(self):
         plugin = QuantumManager.get_plugin()
         with self.subnet() as subnet:
@@ -2962,6 +2984,20 @@ class TestSubnetsV2(QuantumDbPluginV2TestCase):
             subnet_req = self.new_create_request('subnets', data)
             res = subnet_req.get_response(self.api)
             self.assertEqual(res.status_int, 400)
+
+    def test_update_subnet_no_gateway(self):
+        with self.subnet() as subnet:
+            data = {'subnet': {'gateway_ip': '11.0.0.1'}}
+            req = self.new_update_request('subnets', data,
+                                          subnet['subnet']['id'])
+            res = self.deserialize(self.fmt, req.get_response(self.api))
+            self.assertEqual(res['subnet']['gateway_ip'],
+                             data['subnet']['gateway_ip'])
+            data = {'subnet': {'gateway_ip': None}}
+            req = self.new_update_request('subnets', data,
+                                          subnet['subnet']['id'])
+            res = self.deserialize(self.fmt, req.get_response(self.api))
+            self.assertEqual(None, data['subnet']['gateway_ip'])
 
     def test_update_subnet(self):
         with self.subnet() as subnet:

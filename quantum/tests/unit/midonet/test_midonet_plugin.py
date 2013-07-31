@@ -355,6 +355,10 @@ class TestMidonetSubnetsV2(test_plugin.TestSubnetsV2,
         self):
         pass
 
+    def test_update_subnet_no_gateway(self):
+        self._setup_subnet_mocks()
+        super(TestMidonetSubnetsV2, self).test_update_subnet_no_gateway()
+
     def test_create_subnet_gateway_in_allocation_pool_returns_409(self):
         self._setup_subnet_mocks()
         super(TestMidonetSubnetsV2, self)\
@@ -708,6 +712,11 @@ class TestMidonetPortsV2(test_plugin.TestPortsV2,
 
     def test_recycling(self):
         pass
+
+    def test_recycle_ip_address_without_allocation_pool(self):
+        self._setup_port_mocks()
+        super(TestMidonetPortsV2,
+              self).test_recycle_ip_address_without_allocation_pool()
 
     def test_invalid_admin_state(self):
         self._setup_port_mocks()

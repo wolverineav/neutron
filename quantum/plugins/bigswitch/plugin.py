@@ -1160,6 +1160,20 @@ class QuantumRestProxyV2(db_base_plugin_v2.QuantumDbPluginV2,
             # TODO(Sumit): rollback deletion of floating IP
             raise
 
+    def disassociate_floatingips(self, context, port_id):
+        LOG.debug(_("QuantumRestProxyV2: diassociate_floatingips() called"))
+        super(QuantumRestProxyV2, self).disassociate_floatingips(context,
+                                                                 port_id)
+        port = super(QuantumRestProxyV2, self).get_port(context, port_id)
+        net_id = port['network_id']
+        orig_net = super(QuantumRestProxyV2, self).get_network(context,
+                                                               net_id)
+        # update network on network controller
+        try:
+            self._send_update_network(orig_net)
+        except RemoteRestError:
+            raise
+
     def _send_all_data(self):
         """Pushes all data to network ctrl (networks/ports, ports/attachments).
 

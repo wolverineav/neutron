@@ -39,6 +39,8 @@ def convert_to_valid_router_rules(data):
     """
     Validates and converts router rules to the appropriate data structure
     """
+    V4ANY = '0.0.0.0/0'
+    CIDRALL = ['any', 'external']
     if not isinstance(data, list):
         emsg = _("Invalid data format for router rule: '%s'") % data
         LOG.debug(emsg)
@@ -52,13 +54,8 @@ def convert_to_valid_router_rules(data):
                 rule['nexthops'] = rule['nexthops'].split('+')
         except KeyError:
             rule['nexthops'] = []
-        src = rule['source']
-        if rule['source'] == 'any':
-            src = '0.0.0.0/0'
-        dst = rule['destination']
-        if rule['destination'] == 'any':
-            dst = '0.0.0.0/0'
-
+        src = V4ANY if rule['source'] in CIDRALL else rule['source']
+        dst = V4ANY if rule['destination'] in CIDRALL else rule['destination']
         errors = [msg for msg in
                   [attr._verify_dict_keys(expected_keys, rule, False),
                    attr._validate_subnet(dst),

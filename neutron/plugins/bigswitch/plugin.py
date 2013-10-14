@@ -53,6 +53,7 @@ import socket
 
 from oslo.config import cfg
 
+from neutron.agent.common import config
 from neutron.api.rpc.agentnotifiers import dhcp_rpc_agent_api
 from neutron.common import constants as const
 from neutron.common import exceptions
@@ -61,6 +62,8 @@ from neutron.common import topics
 from neutron.common import utils
 from neutron import context as qcontext
 from neutron.db import api as db
+from neutron.db import agents_db
+from neutron.db import agentschedulers_db
 from neutron.db import db_base_plugin_v2
 from neutron.db import dhcp_rpc_base
 from neutron.db import external_net_db
@@ -71,11 +74,13 @@ from neutron.extensions import extra_dhcp_opt as edo_ext
 from neutron.extensions import l3
 from neutron.extensions import portbindings
 from neutron.openstack.common import excutils
+from neutron.openstack.common import importutils
 from neutron.openstack.common import log as logging
 from neutron.openstack.common import rpc
 from neutron.plugins.bigswitch.db import porttracker_db
 from neutron.plugins.bigswitch import routerrule_db
 from neutron.plugins.bigswitch.version import version_string_with_vcs
+from neutron import scheduler
 
 LOG = logging.getLogger(__name__)
 
@@ -84,6 +89,7 @@ EXTENSIONS_PATH = os.path.join(os.path.dirname(__file__), 'extensions')
 if not cfg.CONF.api_extensions_path:
     cfg.CONF.set_override('api_extensions_path',
                           EXTENSIONS_PATH)
+config.register_agent_state_opts_helper(cfg.CONF)
 
 restproxy_opts = [
     cfg.StrOpt('servers', default='localhost:8800',
@@ -421,21 +427,20 @@ class ServerPool(object):
         self.rest_action('DELETE', resource, errstr=errstr)
 
 
-class RpcProxy(dhcp_rpc_base.DhcpRpcCallbackMixin):
+class DhcpRpcProxy(dhcp_rpc_base.DhcpRpcCallbackMixin):
 
     RPC_API_VERSION = '1.1'
-
-    def create_rpc_dispatcher(self):
-        return q_rpc.PluginRpcDispatcher([self])
 
 
 class NeutronRestProxyV2(db_base_plugin_v2.NeutronDbPluginV2,
                          external_net_db.External_net_db_mixin,
                          routerrule_db.RouterRule_db_mixin,
-                         extradhcpopt_db.ExtraDhcpOptMixin):
+                         extradhcpopt_db.ExtraDhcpOptMixin,
+                         agentschedulers_db.DhcpAgentSchedulerDbMixin):
 
     supported_extension_aliases = ["external-net", "router", "binding",
-                                   "router_rules", "extra_dhcp_opt"]
+                                   "router_rules", "extra_dhcp_opt",
+                                   "dhcp_agent_scheduler"]
 
     def __init__(self, server_timeout=None):
         LOG.info(_('NeutronRestProxy: Starting plugin. Version=%s'),
@@ -470,8 +475,8 @@ class NeutronRestProxyV2(db_base_plugin_v2.NeutronDbPluginV2,
         # init dhcp support
         self.topic = topics.PLUGIN
         self.conn = rpc.create_connection(new=True)
-        self.callbacks = RpcProxy()
-        self.dispatcher = self.callbacks.create_rpc_dispatcher()
+        self.callbacks = [DhcpRpcProxy(), agents_db.AgentExtRpcCallback()]
+        self.dispatcher = q_rpc.PluginRpcDispatcher(self.callbacks)
         self.conn.create_consumer(self.topic, self.dispatcher,
                                   fanout=False)
         # Consume from all consumers in a thread

@@ -233,6 +233,56 @@ class N1kvPluginTestCase(test_plugin.NeutronDbPluginV2TestCase):
         self.assertIn('tenant_id', body['networks'][0])
 
 
+class TestN1kvNetworkProfiles(N1kvPluginTestCase):
+    def _prepare_net_profile_data(self, segment_type):
+        netp = {'network_profile': {'name': 'netp1',
+                                    'segment_type': segment_type,
+                                    'tenant_id': self.tenant_id}}
+        if segment_type == 'vlan':
+            netp['network_profile']['segment_range'] = '100-180'
+            netp['network_profile']['physical_network'] = 'phys1'
+        elif segment_type == 'overlay':
+            netp['network_profile']['segment_range'] = '10000-10010'
+            netp['network_profile']['sub_type'] = 'enhanced'
+        return netp
+
+    def test_create_network_profile_plugin(self):
+        data = self._prepare_net_profile_data('vlan')
+        net_p_req = self.new_create_request('network_profiles', data)
+        res = net_p_req.get_response(self.ext_api)
+        self.assertEqual(res.status_int, 201)
+
+    def test_update_network_profile_physical_network_fail(self):
+        net_p = self._make_test_profile(name='netp1')
+        data = {'network_profile': {'physical_network': 'some-phys-net'}}
+        net_p_req = self.new_update_request('network_profiles',
+                                            data,
+                                            net_p['id'])
+        res = net_p_req.get_response(self.ext_api)
+        self.assertEqual(res.status_int, 400)
+
+    def test_update_network_profile_segment_type_fail(self):
+        net_p = self._make_test_profile(name='netp1')
+        data = {'network_profile': {'segment_type': 'overlay'}}
+        net_p_req = self.new_update_request('network_profiles',
+                                            data,
+                                            net_p['id'])
+        res = net_p_req.get_response(self.ext_api)
+        self.assertEqual(res.status_int, 400)
+
+    def test_update_network_profile_sub_type_fail(self):
+        net_p_dict = self._prepare_net_profile_data('overlay')
+        net_p_req = self.new_create_request('network_profiles', net_p_dict)
+        net_p = self.deserialize(self.fmt,
+                                 net_p_req.get_response(self.ext_api))
+        data = {'network_profile': {'sub_type': 'vlan'}}
+        update_req = self.new_update_request('network_profiles',
+                                             data,
+                                             net_p['network_profile']['id'])
+        update_res = update_req.get_response(self.ext_api)
+        self.assertEqual(update_res.status_int, 400)
+
+
 class TestN1kvBasicGet(test_plugin.TestBasicGet,
                        N1kvPluginTestCase):
 

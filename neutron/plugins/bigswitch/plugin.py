@@ -1051,7 +1051,6 @@ class NeutronRestProxyV2(db_base_plugin_v2.NeutronDbPluginV2,
 
     def update_floatingip(self, context, id, floatingip):
         LOG.debug(_("NeutronRestProxyV2: update_floatingip() called"))
-
         with context.session.begin(subtransactions=True):
             # update floatingip in DB
             new_fl_ip = super(NeutronRestProxyV2,
@@ -1061,12 +1060,8 @@ class NeutronRestProxyV2(db_base_plugin_v2.NeutronDbPluginV2,
 
     def delete_floatingip(self, context, id):
         LOG.debug(_("NeutronRestProxyV2: delete_floatingip() called"))
-
-        orig_fl_ip = super(NeutronRestProxyV2, self).get_floatingip(context,
-                                                                    id)
         with context.session.begin(subtransactions=True):
             # delete floating IP in DB
-            net_id = orig_fl_ip['floating_network_id']
             super(NeutronRestProxyV2, self).delete_floatingip(context, id)
             self._send_floatingip_update(context)
 

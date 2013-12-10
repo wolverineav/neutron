@@ -1066,7 +1066,6 @@ class NeutronRestProxyV2(db_base_plugin_v2.NeutronDbPluginV2,
                                                                     id)
         with context.session.begin(subtransactions=True):
             # delete floating IP in DB
-            net_id = orig_fl_ip['floating_network_id']
             super(NeutronRestProxyV2, self).delete_floatingip(context, id)
             self._send_floatingip_update(context)
 

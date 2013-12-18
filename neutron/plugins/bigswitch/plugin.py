@@ -610,6 +610,7 @@ class NeutronRestProxyV2(db_base_plugin_v2.NeutronDbPluginV2,
             self.servers.rest_delete_network(tenant_id, net_id)
             return ret_val
 
+    @utils.synchronized('port-lock', external=True)
     def create_port(self, context, port):
         """Create a port, which is a connection point of a device
         (e.g., a VM NIC) to attach to a L2 Neutron network.
@@ -776,6 +777,7 @@ class NeutronRestProxyV2(db_base_plugin_v2.NeutronDbPluginV2,
         # return new_port
         return new_port
 
+    @utils.synchronized('port-lock', external=True)
     def delete_port(self, context, port_id, l3_port_check=True):
         """Delete a port.
 

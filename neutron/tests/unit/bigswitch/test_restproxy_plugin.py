@@ -33,9 +33,11 @@ import neutron.tests.unit.test_db_plugin as test_plugin
 class BigSwitchProxyPluginV2TestCase(test_base.BigSwitchTestBase,
                                      test_plugin.NeutronDbPluginV2TestCase):
 
-    def setUp(self):
+    def setUp(self, plugin_name=None):
         self.setup_config_files()
         self.setup_patches()
+        if plugin_name:
+            self._plugin_name = plugin_name
         super(BigSwitchProxyPluginV2TestCase,
               self).setUp(self._plugin_name)
 

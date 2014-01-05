@@ -72,6 +72,7 @@ from neutron.extensions import external_net
 from neutron.extensions import extra_dhcp_opt as edo_ext
 from neutron.extensions import l3
 from neutron.extensions import portbindings
+from neutron.db import quota_db  # noqa
 from neutron.openstack.common import excutils
 from neutron.openstack.common import importutils
 from neutron.openstack.common import log as logging
@@ -431,7 +432,7 @@ class NeutronRestProxyV2(db_base_plugin_v2.NeutronDbPluginV2,
 
     supported_extension_aliases = ["external-net", "router", "binding",
                                    "router_rules", "extra_dhcp_opt",
-                                   "dhcp_agent_scheduler", "agent"]
+                                   "dhcp_agent_scheduler", "agent", "quotas"]
 
     def __init__(self, server_timeout=None):
         LOG.info(_('NeutronRestProxy: Starting plugin. Version=%s'),

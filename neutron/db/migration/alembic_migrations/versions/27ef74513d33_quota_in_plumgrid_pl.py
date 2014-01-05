@@ -31,7 +31,8 @@ down_revision = '3a520dd165d0'
 
 migration_for_plugins = [
     'neutron.plugins.plumgrid.plumgrid_plugin.plumgrid_plugin.'
-    'NeutronPluginPLUMgridV2'
+    'NeutronPluginPLUMgridV2',
+    'neutron.plugins.bigswitch.plugin.NeutronRestProxyV2',
 ]
 
 from alembic import op

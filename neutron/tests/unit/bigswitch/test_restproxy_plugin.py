@@ -149,6 +149,31 @@ class TestBigSwitchProxyPortsV2(test_plugin.TestPortsV2,
                     port = self._get_ports(n['network']['id'])[0]
                     self.assertEqual('ERROR', port['status'])
 
+    def test_correct_shared_net_tenant_id(self):
+        # tenant_id in port requests should match network tenant_id instead
+        # of port tenant_id
+        def rest_port_op(self, ten_id, netid, port):
+            if ten_id != 'SHARED':
+                raise Exception('expecting tenant_id SHARED. got %s' % ten_id)
+        with self.network(tenant_id='SHARED', shared=True) as net:
+            with self.subnet(network=net) as sub:
+                prefix = 'neutron.plugins.bigswitch.plugin.ServerPool.%s'
+                tomock = [prefix % 'rest_plug_interface',
+                          prefix % 'rest_unplug_interface']
+                patches = [patch(f, create=True, new=rest_port_op)
+                           for f in tomock]
+                for restp in patches:
+                    restp.start()
+                with self.port(subnet=sub, tenant_id='port-owner') as port:
+                    data = {'port': {'binding:host_id': 'someotherhost',
+                            'device_id': 'override_dev'}}
+                    req = self.new_update_request('ports', data,
+                                                  port['port']['id'])
+                    res = req.get_response(self.api)
+                    self.assertEqual(res.status_int, 200)
+                for restp in patches:
+                    restp.stop()
+
 
 class TestBigSwitchProxyPortsV2IVS(test_plugin.TestPortsV2,
                                    BigSwitchProxyPluginV2TestCase,

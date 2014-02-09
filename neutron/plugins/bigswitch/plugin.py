@@ -756,12 +756,18 @@ class NeutronRestProxyV2(db_base_plugin_v2.NeutronDbPluginV2,
         if (new_port.get("device_id") != orig_port.get("device_id") and
             orig_port.get("device_id")):
             try:
-                self.servers.rest_unplug_interface(orig_port["tenant_id"],
+                orig_net = super(NeutronRestProxyV2,
+                                 self).get_network(context,
+                                                   orig_port["network_id"])
+                self.servers.rest_unplug_interface(orig_net["tenant_id"],
                                                    orig_port["network_id"],
                                                    orig_port["id"])
                 device_id = new_port.get("device_id")
                 if device_id:
-                    self.rest_plug_interface(new_port["tenant_id"],
+                    new_net = super(NeutronRestProxyV2,
+                                    self).get_network(context,
+                                                      new_port["network_id"])
+                    self.rest_plug_interface(new_net["tenant_id"],
                                              new_port["network_id"],
                                              new_port, device_id)
 
@@ -805,11 +811,9 @@ class NeutronRestProxyV2(db_base_plugin_v2.NeutronDbPluginV2,
 
     def _unplug_port(self, context, port_id):
         port = super(NeutronRestProxyV2, self).get_port(context, port_id)
-        tenant_id = port['tenant_id']
         net_id = port['network_id']
-        if tenant_id == '':
-            net = super(NeutronRestProxyV2, self).get_network(context, net_id)
-            tenant_id = net['tenant_id']
+        net = super(NeutronRestProxyV2, self).get_network(context, net_id)
+        tenant_id = net['tenant_id']
         if port.get("device_id"):
             self.servers.rest_unplug_interface(tenant_id, net_id, port_id)
             # Port should transition to error state now that it's unplugged
@@ -821,11 +825,9 @@ class NeutronRestProxyV2(db_base_plugin_v2.NeutronDbPluginV2,
 
     def _delete_port(self, context, port_id):
         port = super(NeutronRestProxyV2, self).get_port(context, port_id)
-        tenant_id = port['tenant_id']
         net_id = port['network_id']
-        if tenant_id == '':
-            net = super(NeutronRestProxyV2, self).get_network(context, net_id)
-            tenant_id = net['tenant_id']
+        net = super(NeutronRestProxyV2, self).get_network(context, net_id)
+        tenant_id = net['tenant_id']
         # Delete from DB
         ret_val = super(NeutronRestProxyV2,
                         self)._delete_port(context, port_id)

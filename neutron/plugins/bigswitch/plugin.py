@@ -465,7 +465,13 @@ class NeutronRestProxyV2(db_base_plugin_v2.NeutronDbPluginV2,
 
         # validate config
         assert servers is not None, _('Servers not defined. Aborting plugin')
-        servers = tuple(s.rsplit(':', 1) for s in servers.split(','))
+        servers = servers.split(',')
+        for k, s in enumerate(servers):
+            spl = s.rsplit(':', 1)
+            if len(spl) == 1:
+                spl.append(80)
+            servers[k] = ':'.join(spl)
+        servers = tuple(s.rsplit(':', 1) for s in servers)
         servers = tuple((server, int(port)) for server, port in servers)
         assert all(len(s) == 2 for s in servers), SYNTAX_ERROR_MESSAGE
 

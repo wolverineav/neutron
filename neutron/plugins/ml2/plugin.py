@@ -31,6 +31,7 @@ from neutron.db import external_net_db
 from neutron.db import extradhcpopt_db
 from neutron.db import models_v2
 from neutron.db import quota_db  # noqa
+from neutron.db import physicalport_db
 from neutron.db import securitygroups_rpc_base as sg_db_rpc
 from neutron.extensions import allowedaddresspairs as addr_pair
 from neutron.extensions import extra_dhcp_opt as edo_ext
@@ -67,7 +68,8 @@ class Ml2Plugin(db_base_plugin_v2.NeutronDbPluginV2,
                 sg_db_rpc.SecurityGroupServerRpcMixin,
                 agentschedulers_db.DhcpAgentSchedulerDbMixin,
                 addr_pair_db.AllowedAddressPairsMixin,
-                extradhcpopt_db.ExtraDhcpOptMixin):
+                extradhcpopt_db.ExtraDhcpOptMixin,
+                physicalport_db.PhysicalPortDbMixin):
 
     """Implement the Neutron L2 abstractions using modules.
 

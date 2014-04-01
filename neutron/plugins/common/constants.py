@@ -23,6 +23,7 @@ FIREWALL = "FIREWALL"
 VPN = "VPN"
 METERING = "METERING"
 L3_ROUTER_NAT = "L3_ROUTER_NAT"
+PHYSICAL_PORT = "PHYSICALPORT"
 
 
 #maps extension alias to service type

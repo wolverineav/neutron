@@ -113,7 +113,7 @@ class PhysicalPortDbMixin(PhysicalPortPluginBase, base_db.CommonDbMixin):
                 PhysicalPort).with_lockmode('update')
             physicalport_db = physicalport_query.filter_by(id=id).one()
             physicalport_db.update(physical_port)
-        return self._make_physicalport_dict(physicalport_db)
+        return self._make_physical_port_dict(physicalport_db)
 
     def delete_physical_port(self, context, id):
         LOG.debug(_("delete_physical_port() called"))

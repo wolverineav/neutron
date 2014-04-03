@@ -20,15 +20,17 @@ import abc
 from oslo.config import cfg
 import six
 
+from neutron import manager
+from neutron import quota
 from neutron.api import extensions
 from neutron.api.v2 import attributes as attr
 from neutron.api.v2 import base
 from neutron.api.v2 import resource_helper
 from neutron.common import exceptions as qexception
-from neutron import manager
+from neutron.openstack.common import log as logging
 from neutron.plugins.common import constants
-from neutron.services.service_base import ServicePluginBase
 
+LOG = logging.getLogger(__name__)
 
 # PhysicalPort Exceptions
 class PhysicalPortNotFound(qexception.NotFound):
@@ -48,12 +50,12 @@ RESOURCE_ATTRIBUTE_MAP = {
         'id': {'allow_post': False, 'allow_put': False,
                'validate': {'type:uuid': None},
                'is_visible': True, 'primary_key': True},
-        'tenant_id': {'allow_post': True, 'allow_put': False,
+        'tenant_id': {'allow_post': True, 'allow_put': True,
                       'required_by_policy': True,
                       'is_visible': True},
         'port_id': {'allow_post': True, 'allow_put': True,
-                    'validate': {'type:uuid': None},
-                    'is_visible': True},
+                    'validate': {'type:uuid_or_none': None},
+                    'is_visible': True, 'default': None},
         'name': {'allow_post': True, 'allow_put': True,
                  'validate': {'type:string': None},
                  'is_visible': True, 'default': ''},
@@ -84,7 +86,7 @@ physicalport_quota_opts = [
 cfg.CONF.register_opts(physicalport_quota_opts, 'QUOTAS')
 
 
-class PhysicalPort(extensions.ExtensionDescriptor):
+class Physicalport(extensions.ExtensionDescriptor):
 
     @classmethod
     def get_name(cls):
@@ -92,7 +94,7 @@ class PhysicalPort(extensions.ExtensionDescriptor):
 
     @classmethod
     def get_alias(cls):
-        return "physicalport"
+        return "physical_port"
 
     @classmethod
     def get_description(cls):
@@ -106,26 +108,32 @@ class PhysicalPort(extensions.ExtensionDescriptor):
     def get_updated(cls):
         return "2014-03-25:00:00-00:00"
 
+    def update_attributes_map(self, attributes):
+        super(Physicalport, self).update_attributes_map(
+            attributes, extension_attrs_map=RESOURCE_ATTRIBUTE_MAP)
+
     @classmethod
     def get_resources(cls):
         plural_mappings = resource_helper.build_plural_mappings(
             {}, RESOURCE_ATTRIBUTE_MAP)
+        resource_name = "physical_port"
+        collection_name = resource_name.replace('_', '-') + "s"
+        exts = []
         attr.PLURALS.update(plural_mappings)
-        resources = resource_helper.build_resource_info(plural_mappings,
-                                                        RESOURCE_ATTRIBUTE_MAP,
-                                                        constants.PHYSICALPORT)
-        plugin = manager.NeutronManager.get_service_plugins()[
-            constants.PHYSICALPORT]
+        plugin = manager.NeutronManager.get_plugin()
+        params = RESOURCE_ATTRIBUTE_MAP.get(resource_name + "s", dict()) 
+        quota.QUOTAS.register_resource_by_name(resource_name)
+        controller = base.create_resource(collection_name,
+                                          resource_name,
+                                          plugin, params, allow_bulk=True,
+                                          allow_pagination=True,
+                                          allow_sorting=True)
 
-        return resources
-
-    @classmethod
-    def get_plugin_interface(cls):
-        return PhysicalPortPluginBase
-
-    def update_attributes_map(self, attributes):
-        super(PhysicalPort, self).update_attributes_map(
-            attributes, extension_attrs_map=RESOURCE_ATTRIBUTE_MAP)
+        ext = extensions.ResourceExtension(collection_name,
+                                              controller,
+                                              attr_map=params)
+        exts.append(ext)
+        return exts
 
     def get_extended_resources(self, version):
         if version == "2.0":
@@ -135,16 +143,7 @@ class PhysicalPort(extensions.ExtensionDescriptor):
 
 
 @six.add_metaclass(abc.ABCMeta)
-class PhysicalPortPluginBase(ServicePluginBase):
-
-    def get_plugin_name(self):
-        return constants.PHYSICALPORT
-
-    def get_plugin_type(self):
-        return constants.PHYSICALPORT
-
-    def get_plugin_description(self):
-        return 'Physical port plugin'
+class PhysicalPortPluginBase(object):
 
     @abc.abstractmethod
     def get_physical_ports(self, context, filters=None, fields=None):

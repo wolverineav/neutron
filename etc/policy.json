@@ -67,8 +67,6 @@
 
     "create_physical_port": "",
     "get_physical_port": "rule:admin_or_owner",
-    "create_physical_port:shared": "rule:admin_only",
-    "get_physical_port:shared": "rule:admin_only",
     "update_physical_port": "rule:admin_or_owner",
     "delete_physical_port": "rule:admin_or_owner",
 

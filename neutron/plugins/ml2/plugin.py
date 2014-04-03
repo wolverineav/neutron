@@ -1,4 +1,5 @@
 # Copyright (c) 2013 OpenStack Foundation
+
 # All Rights Reserved.
 #
 #    Licensed under the Apache License, Version 2.0 (the "License"); you may
@@ -92,7 +93,7 @@ class Ml2Plugin(db_base_plugin_v2.NeutronDbPluginV2,
                                     "quotas", "security-group", "agent",
                                     "dhcp_agent_scheduler",
                                     "multi-provider", "allowed-address-pairs",
-                                    "extra_dhcp_opt"]
+                                    "extra_dhcp_opt", "physical_port"]
 
     @property
     def supported_extension_aliases(self):

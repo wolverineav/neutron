@@ -18,6 +18,7 @@
 #    @author: Kanzhe Jiang, Big Switch Networks
 
 import sqlalchemy as sa
+from sqlalchemy.orm import exc
 
 from neutron.api.v2 import attributes
 from neutron.db import db_base_plugin_v2 as base_db
@@ -36,7 +37,7 @@ class PhysicalPort(model_base.BASEV2, models_v2.HasId, models_v2.HasTenant):
     """ Represents a neutron physical port. """
 
     __tablename__ = 'physical_ports'
-    port_id = sa.Column(sa.String(36), sa.ForeignKey('ports.id'))
+    port_id = sa.Column(sa.String(36))
     name = sa.Column(sa.String(255))
     mac_address = sa.Column(sa.String(32), nullable=False)
     attachment = sa.Column(sa.String(255), nullable=False)
@@ -76,7 +77,9 @@ class PhysicalPortDbMixin(PhysicalPortPluginBase, base_db.CommonDbMixin):
                'port_id': physicalport['port_id']}
         return self._fields(res, fields)
 
-    def get_physical_ports(self, context, filters=None, fields=None):
+    def get_physical_ports(self, context, filters=None, fields=None,
+                    sorts=None, limit=None, marker=None,
+                    page_reverse=False):
         LOG.debug(_("get_physical_ports() called"))
         return self._get_collection(context, PhysicalPort,
                                     self._make_physical_port_dict,
@@ -87,29 +90,29 @@ class PhysicalPortDbMixin(PhysicalPortPluginBase, base_db.CommonDbMixin):
         physicalport = self._get_physical_port(context, id)
         return self._make_physical_port_dict(physicalport, fields)
 
-    def create_physical_port(self, context, physicalport):
+    def create_physical_port(self, context, physical_port):
         LOG.debug(_("create_physical_port() called"))
-        physicalport = physicalport['physical_port']
-        tenant_id = self._get_tenant_id_for_create(context, physicalport)
+        physical_port = physical_port['physical_port']
+        tenant_id = self._get_tenant_id_for_create(context, physical_port)
         with context.session.begin(subtransactions=True):
             physicalport_db = PhysicalPort(id=uuidutils.generate_uuid(),
                                    tenant_id=tenant_id,
-                                   name=physicalport['name'],
-                                   mac_address=physicalport['mac_address'],
-                                   attachment=physicalport['attachment'],
-                                   port_id=physicalport['port_id'],
-                                   admin_state_up=physicalport['admin_state_up'])
+                                   name=physical_port['name'],
+                                   mac_address=physical_port['mac_address'],
+                                   attachment=physical_port['attachment'],
+                                   port_id=physical_port['port_id'],
+                                   admin_state_up=physical_port['admin_state_up'])
             context.session.add(physicalport_db)
         return self._make_physical_port_dict(physicalport_db)
 
-    def update_physical_port(self, context, id, physicalport):
+    def update_physical_port(self, context, id, physical_port):
         LOG.debug(_("update_physical_port() called"))
-        physicalport = physicalport['physical_port']
+        physical_port = physical_port['physical_port']
         with context.session.begin(subtransactions=True):
             physicalport_query = context.session.query(
                 PhysicalPort).with_lockmode('update')
             physicalport_db = physicalport_query.filter_by(id=id).one()
-            physicalport_db.update(physicalport)
+            physicalport_db.update(physical_port)
         return self._make_physicalport_dict(physicalport_db)
 
     def delete_physical_port(self, context, id):

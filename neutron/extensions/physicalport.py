@@ -53,6 +53,8 @@ RESOURCE_ATTRIBUTE_MAP = {
         'tenant_id': {'allow_post': True, 'allow_put': True,
                       'required_by_policy': True,
                       'is_visible': True},
+        'network_id': {'allow_post': True, 'allow_put': True,
+                      'is_visible': True},
         'port_id': {'allow_post': True, 'allow_put': True,
                     'validate': {'type:uuid_or_none': None},
                     'is_visible': True, 'default': None},

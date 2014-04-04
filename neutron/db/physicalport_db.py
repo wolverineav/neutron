@@ -37,7 +37,8 @@ class PhysicalPort(model_base.BASEV2, models_v2.HasId, models_v2.HasTenant):
     """ Represents a neutron physical port. """
 
     __tablename__ = 'physical_ports'
-    port_id = sa.Column(sa.String(36))
+    port_id = sa.Column(sa.String(36), sa.ForeignKey('physical_ports.id'),
+                     nullable=True)
     name = sa.Column(sa.String(255))
     mac_address = sa.Column(sa.String(32), nullable=False)
     attachment = sa.Column(sa.String(255), nullable=False)

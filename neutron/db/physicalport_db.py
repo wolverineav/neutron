@@ -107,14 +107,64 @@ class PhysicalPortDbMixin(PhysicalPortPluginBase, base_db.CommonDbMixin):
             context.session.add(physicalport_db)
         return self._make_physical_port_dict(physicalport_db)
 
+    def _make_port_body(self, tenant_id, network_id, mac_address, device_id):
+        port_dict = dict(
+                admin_state_up=True,
+                device_id=device_id,
+                network_id=network_id,
+                mac_address=mac_address,
+                name='',
+                device_owner='neutron:physical_port',
+                fixed_ips=attributes.ATTR_NOT_SPECIFIED)
+        return { 'port': port_dict }
+
     def update_physical_port(self, context, id, physical_port):
         LOG.debug(_("update_physical_port() called"))
-        physical_port = physical_port['physical_port']
+        attrs = physical_port['physical_port']
+
+        session = context.session
+        original_network_id = None
         with context.session.begin(subtransactions=True):
+            try:
+                pport_db = (session.query(physicalport_db.PhysicalPort).
+                           enable_eagerloads(False).
+                           filter_by(id=id).with_lockmode('update').one())
+            except sa_exc.NoResultFound:
+                LOG.error(_("The phyiscal port '%s' doesn't exist"), id)
+                raise exc.PortNotFound(port_id=id)
+
+            original_pport = self._make_physical_port_dict(pport_db)
+            original_port_id = original_pport['port_id']
+            if original_port_id:
+                try:
+                    port_db = (session.query(models_v2.Port)
+                              .enable_eagerloads(False)
+                              .filter_by(id=original_port_id)
+                              .with_lockmode('update').one())
+                    original_port = self._make_port_dict(port_db)
+                    original_network_id = original_port['network_id']
+                except sa_exc.NoResultFound:
+                    LOG.debug(_("The port '%s' was deleted"), id)
+
+            # If network_id is updated, then delete the old port and create a
+            # new port
+            new_tenant_id = attrs.get('tenant_id')
+            new_network_id = attrs.get('network_id')
+            mac_address = original_pport.get('mac_address')
+            if new_network_id != original_network_id:
+                if original_network_id:
+                    self.delete_port(context, original_pport['port_id'])
+                if new_network_id:
+                    port_request = self._make_port_body(new_tenant_id,
+                                        new_network_id, mac_address, id)
+                    retval = self.create_port(context, port_request)
+                    # set port_id of the physical port
+                    attrs['port_id'] = retval['id']
+
             physicalport_query = context.session.query(
                 PhysicalPort).with_lockmode('update')
             physicalport_db = physicalport_query.filter_by(id=id).one()
-            physicalport_db.update(physical_port)
+            physicalport_db.update(attrs)
         return self._make_physical_port_dict(physicalport_db)
 
     def delete_physical_port(self, context, id):

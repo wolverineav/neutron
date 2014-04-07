@@ -65,10 +65,11 @@
     "update_port:mac_learning_enabled": "rule:admin_or_network_owner",
     "delete_port": "rule:admin_or_owner",
 
-    "create_physical_port": "",
+    "create_physical_port": "rule:admin_only",
     "get_physical_port": "rule:admin_or_owner",
+    "update_physical_port:tenant_id": "rule:admin_only",
     "update_physical_port": "rule:admin_or_owner",
-    "delete_physical_port": "rule:admin_or_owner",
+    "delete_physical_port": "rule:admin_only",
 
     "create_router:external_gateway_info:enable_snat": "rule:admin_only",
     "update_router:external_gateway_info:enable_snat": "rule:admin_only",

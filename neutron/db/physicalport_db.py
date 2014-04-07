@@ -37,7 +37,9 @@ class PhysicalPort(model_base.BASEV2, models_v2.HasId, models_v2.HasTenant):
     """ Represents a neutron physical port. """
 
     __tablename__ = 'physical_ports'
-    port_id = sa.Column(sa.String(36))
+    port_id = sa.Column(sa.String(36),
+                        sa.ForeignKey('ports.id', ondelete='SET NULL'),
+                        nullable=True)
     name = sa.Column(sa.String(255))
     mac_address = sa.Column(sa.String(32), nullable=False)
     attachment = sa.Column(sa.String(255), nullable=False)
@@ -118,6 +120,18 @@ class PhysicalPortDbMixin(PhysicalPortPluginBase, base_db.CommonDbMixin):
     def delete_physical_port(self, context, id):
         LOG.debug(_("delete_physical_port() called"))
         with context.session.begin(subtransactions=True):
+            try:
+                pport_db = (session.query(physicalport_db.PhysicalPort).
+                           enable_eagerloads(False).
+                           filter_by(id=id).with_lockmode('update').one())
+            except sa_exc.NoResultFound:
+                LOG.error(_("The phyiscal port '%s' doesn't exist"), id)
+                return
+
+            port_id = pport_db.get('port_id')
+            if port_id:
+                self.delete_port(context, port_id)
+
             physicalport_query = context.session.query(
                 PhysicalPort).with_lockmode('update')
             physicalport_db = physicalport_query.filter_by(id=id).one()

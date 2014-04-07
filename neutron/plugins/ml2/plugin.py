@@ -777,10 +777,9 @@ class Ml2Plugin(db_base_plugin_v2.NeutronDbPluginV2,
                 admin_state_up=True,
                 device_id=device_id,
                 network_id=network_id,
-                tenant_id=tenant_id,
                 mac_address=mac_address,
                 name='',
-                device_owner='compute:nova',
+                device_owner='neutron:physical_port',
                 fixed_ips=attributes.ATTR_NOT_SPECIFIED)
         return { 'port': port_dict }
 
@@ -832,6 +831,7 @@ class Ml2Plugin(db_base_plugin_v2.NeutronDbPluginV2,
 
 
     def delete_physical_port(self, context, id):
+        session = context.session
         with session.begin(subtransactions=True):
             try:
                 pport_db = (session.query(physicalport_db.PhysicalPort).

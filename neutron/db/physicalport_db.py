@@ -49,13 +49,13 @@ class PhysicalPort(model_base.BASEV2, models_v2.HasId, models_v2.HasTenant):
                  mac_address=None, attachment=None, admin_state_up=None):
         self.id = id
         self.tenant_id = tenant_id
-        self.port_id = port_id 
-        self.name = name 
-        self.mac_address = mac_address 
-        self.attachment = attachment 
+        self.port_id = port_id
+        self.name = name
+        self.mac_address = mac_address
+        self.attachment = attachment
         self.admin_state_up = admin_state_up
 
- 
+
 class PhysicalPortDbMixin(PhysicalPortPluginBase, base_db.CommonDbMixin):
     """Mixin class for PhysicalPort DB implementation."""
 
@@ -148,6 +148,7 @@ class PhysicalPortDbMixin(PhysicalPortPluginBase, base_db.CommonDbMixin):
 
             original_pport = self._make_physical_port_dict(pport_db)
             original_port_id = original_pport['port_id']
+            original_tenant_id = original_pport['tenant_id']
             if original_port_id:
                 try:
                     port_db = (session.query(models_v2.Port)
@@ -157,11 +158,17 @@ class PhysicalPortDbMixin(PhysicalPortPluginBase, base_db.CommonDbMixin):
                     original_port = self._make_port_dict(port_db)
                     original_network_id = original_port['network_id']
                 except sa_exc.NoResultFound:
-                    LOG.debug(_("The port '%s' was deleted"), id)
+                    LOG.debug(_("The port '%s' was deleted"), original_port_id)
+
+            # If a physical port can assign to a different tenant only if it
+            # not in use.
+            new_tenant_id = attrs.get('tenant_id')
+            if new_tenant_id != original_tenant_id and original_network_id:
+                raise physicalport.PhysicalPortInUse(id=id,
+                                         net_id=original_network_id)
 
             # If network_id is updated, then delete the old port and create a
             # new port
-            new_tenant_id = attrs.get('tenant_id')
             new_network_id = attrs.get('network_id')
             mac_address = original_pport.get('mac_address')
             attachment = original_pport.get('attachment')

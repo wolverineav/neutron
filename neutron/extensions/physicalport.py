@@ -42,7 +42,7 @@ class PhysicalPortExists(qexception.InUse):
 
 
 class PhysicalPortInUse(qexception.InUse):
-    message = _("Physical port %(id) is already assign to network %(net_id)")
+    message = _("Physical port %(id)s is already assign to network %(net_id)s")
 
 
 RESOURCE_ATTRIBUTE_MAP = {

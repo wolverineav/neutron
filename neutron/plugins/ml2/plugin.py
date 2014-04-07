@@ -610,6 +610,11 @@ class Ml2Plugin(db_base_plugin_v2.NeutronDbPluginV2,
             # the fact that an error occurred.
             LOG.error(_("mechanism_manager.delete_subnet_postcommit failed"))
 
+    def _process_physical_port_attributes(self, port_context, attrs):
+        # Get physical_port attachment if the port is a physical port
+        if attrs['device_owner'] == 'neutron:physical_port':
+            port_context._port['physical_attachment'] = attrs['attachment']
+
     def create_port(self, context, port):
         attrs = port['port']
         attrs['status'] = const.PORT_STATUS_DOWN
@@ -625,6 +630,7 @@ class Ml2Plugin(db_base_plugin_v2.NeutronDbPluginV2,
             mech_context = driver_context.PortContext(self, context, result,
                                                       network)
             self._process_port_binding(mech_context, attrs)
+            self._process_physical_port_attributes(mech_context, attrs)
             result[addr_pair.ADDRESS_PAIRS] = (
                 self._process_create_allowed_address_pairs(
                     context, result,

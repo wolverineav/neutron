@@ -18,7 +18,7 @@
 #    @author: Kanzhe Jiang, Big Switch Networks
 
 import sqlalchemy as sa
-from sqlalchemy.orm import exc
+from sqlalchemy.orm import exc as sa_exc
 
 from neutron.api.v2 import attributes
 from neutron.db import db_base_plugin_v2 as base_db
@@ -66,7 +66,7 @@ class PhysicalPortDbMixin(PhysicalPortPluginBase, base_db.CommonDbMixin):
     def _get_physical_port(self, context, id):
         try:
             return self._get_by_id(context, PhysicalPort, id)
-        except exc.NoResultFound:
+        except sa_exc.NoResultFound:
             raise physicalport.PhysicalPortNotFound(id=id)
 
     def _make_physical_port_dict(self, physicalport, fields=None):
@@ -78,6 +78,18 @@ class PhysicalPortDbMixin(PhysicalPortPluginBase, base_db.CommonDbMixin):
                'admin_state_up': physicalport['admin_state_up'],
                'port_id': physicalport['port_id']}
         return self._fields(res, fields)
+
+    def _get_physical_port_by_port_id(self, context, port_id):
+        session = context.session
+        with context.session.begin(subtransactions=True):
+            try:
+                pport_db = (session.query(PhysicalPort).
+                           enable_eagerloads(False).
+                           filter_by(port_id=port_id).one())
+            except sa_exc.NoResultFound:
+                LOG.error(_("The phyiscal port '%s' doesn't exist"), id)
+                raise sa_exc.PortNotFound(port_id=id)
+        return self._make_physical_port_dict(pport_db)
 
     def get_physical_ports(self, context, filters=None, fields=None,
                     sorts=None, limit=None, marker=None,
@@ -107,7 +119,7 @@ class PhysicalPortDbMixin(PhysicalPortPluginBase, base_db.CommonDbMixin):
             context.session.add(physicalport_db)
         return self._make_physical_port_dict(physicalport_db)
 
-    def _make_port_body(self, tenant_id, network_id, mac_address, device_id):
+    def _make_port_body(self, tenant_id, network_id, mac_address, attachment, device_id):
         port_dict = dict(
                 admin_state_up=True,
                 device_id=device_id,
@@ -115,6 +127,7 @@ class PhysicalPortDbMixin(PhysicalPortPluginBase, base_db.CommonDbMixin):
                 mac_address=mac_address,
                 name='',
                 device_owner='neutron:physical_port',
+                attachment=attachment,
                 fixed_ips=attributes.ATTR_NOT_SPECIFIED)
         return { 'port': port_dict }
 
@@ -126,12 +139,12 @@ class PhysicalPortDbMixin(PhysicalPortPluginBase, base_db.CommonDbMixin):
         original_network_id = None
         with context.session.begin(subtransactions=True):
             try:
-                pport_db = (session.query(physicalport_db.PhysicalPort).
+                pport_db = (session.query(PhysicalPort).
                            enable_eagerloads(False).
                            filter_by(id=id).with_lockmode('update').one())
             except sa_exc.NoResultFound:
                 LOG.error(_("The phyiscal port '%s' doesn't exist"), id)
-                raise exc.PortNotFound(port_id=id)
+                raise sa_exc.PortNotFound(port_id=id)
 
             original_pport = self._make_physical_port_dict(pport_db)
             original_port_id = original_pport['port_id']
@@ -151,12 +164,13 @@ class PhysicalPortDbMixin(PhysicalPortPluginBase, base_db.CommonDbMixin):
             new_tenant_id = attrs.get('tenant_id')
             new_network_id = attrs.get('network_id')
             mac_address = original_pport.get('mac_address')
+            attachment = original_pport.get('attachment')
             if new_network_id != original_network_id:
                 if original_network_id:
                     self.delete_port(context, original_pport['port_id'])
                 if new_network_id:
                     port_request = self._make_port_body(new_tenant_id,
-                                        new_network_id, mac_address, id)
+                                        new_network_id, mac_address, attachment, id)
                     retval = self.create_port(context, port_request)
                     # set port_id of the physical port
                     attrs['port_id'] = retval['id']
@@ -171,7 +185,7 @@ class PhysicalPortDbMixin(PhysicalPortPluginBase, base_db.CommonDbMixin):
         LOG.debug(_("delete_physical_port() called"))
         with context.session.begin(subtransactions=True):
             try:
-                pport_db = (session.query(physicalport_db.PhysicalPort).
+                pport_db = (session.query(PhysicalPort).
                            enable_eagerloads(False).
                            filter_by(id=id).with_lockmode('update').one())
             except sa_exc.NoResultFound:

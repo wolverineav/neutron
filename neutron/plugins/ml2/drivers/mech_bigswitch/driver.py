@@ -109,6 +109,11 @@ class BigSwitchMechanismDriver(NeutronRestProxyV2Base,
             host_id = ''
         prepped_port = self._extend_port_dict_binding(actx, port)
         prepped_port = self._map_state_and_status(prepped_port)
+
+        # If it is a port for a physical port, ignore the host_id check
+        if prepped_port['device_owner'] == 'neutron:physical_port':
+            return prepped_port
+
         if (portbindings.HOST_ID not in prepped_port or
             prepped_port[portbindings.HOST_ID] == ''):
             LOG.warning(_("Ignoring port notification to controller because "

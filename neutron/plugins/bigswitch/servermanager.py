@@ -110,7 +110,7 @@ class ServerProxy(object):
 
     def get_capabilities(self):
         try:
-            body = self.rest_call('GET', CAPABILITIES_PATH)[3]
+            body = self.rest_call('GET', CAPABILITIES_PATH)[2]
             self.capabilities = json.loads(body)
         except Exception:
             LOG.error(_("Couldn't retrieve capabilities. "
@@ -402,6 +402,7 @@ class ServerPool(object):
                                           reconnect=self.always_reconnect)
             # If inconsistent, do a full synchronization
             if ret[0] == httplib.CONFLICT:
+                self.consistency_hash = None
                 if not self.get_topo_function:
                     raise cfg.Error(_('Server requires synchronization, '
                                       'but no topology function was defined.'))
@@ -556,7 +557,7 @@ class ServerPool(object):
             # doesn't match, the backend will return a synchronization error
             # that will be handled by the rest_call.
             eventlet.sleep(polling_interval)
-            self.rest_call('GET', HEALTH_PATH)
+            self.rest_action('GET', HEALTH_PATH)
 
 
 class HTTPSConnectionWithValidation(httplib.HTTPSConnection):

@@ -131,7 +131,7 @@ class ServerProxy(object):
         headers['NeutronProxy-Agent'] = self.name
         headers['Instance-ID'] = self.neutron_id
         headers['Orchestration-Service-ID'] = ORCHESTRATION_SERVICE_ID
-        headers[HASH_MATCH_HEADER] = self.mypool.consistency_hash
+        headers[HASH_MATCH_HEADER] = self.mypool.consistency_hash or ''
         if 'keep-alive' in self.capabilities:
             headers['Connection'] = 'keep-alive'
         else:
@@ -555,7 +555,7 @@ class ServerPool(object):
             # If consistency is supported, all we have to do is make any
             # rest call and the consistency header will be added. If it
             # doesn't match, the backend will return a synchronization error
-            # that will be handled by the rest_call.
+            # that will be handled by the rest_action.
             eventlet.sleep(polling_interval)
             self.rest_action('GET', HEALTH_PATH)
 

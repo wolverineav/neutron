@@ -178,6 +178,8 @@ class NeutronRestProxyV2Base(db_base_plugin_v2.NeutronDbPluginV2,
                       get_routers=True):
         admin_context = qcontext.get_admin_context()
         networks = []
+        # this method is used by the ML2 driver so it can't directly invoke
+        # the self.get_(ports|networks) methods
         plugin = manager.NeutronManager.get_plugin()
         all_networks = plugin.get_networks(admin_context) or []
         for net in all_networks:

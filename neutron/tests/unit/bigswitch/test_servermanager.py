@@ -72,7 +72,7 @@ class ServerManagerTests(test_rp.BigSwitchProxyPluginV2TestCase):
             mock.patch(
                 SERVERMANAGER + '.ServerPool.rest_call',
                 side_effect=servermanager.RemoteRestError(
-                    reason='Failure to trigger except clause'
+                    reason='Failure to trigger except clause.'
                 )
             ),
             mock.patch(

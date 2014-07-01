@@ -153,7 +153,7 @@ class OFASecurityGroupAgent(sg_rpc.SecurityGroupAgentRpcMixin):
         self.context = context
         self.plugin_rpc = plugin_rpc
         self.root_helper = root_helper
-        self.init_firewall()
+        self.init_firewall(defer_refresh_firewall=True)
 
 
 class OFANeutronAgentRyuApp(app_manager.RyuApp):
@@ -644,19 +644,21 @@ class OFANeutronAgent(sg_rpc.SecurityGroupAgentRpcCallbackMixin):
                                       physical_network, segmentation_id)
         lvm = self.local_vlan_map[net_uuid]
         lvm.vif_ports[port.vif_id] = port
-
-        self.int_br.set_db_attribute("Port", port.port_name, "tag",
-                                     str(lvm.vlan))
-        if int(port.ofport) != -1:
-            match = self.int_br.ofparser.OFPMatch(in_port=port.ofport)
-            msg = self.int_br.ofparser.OFPFlowMod(
-                self.int_br.datapath,
-                table_id=ryu_ofp13.OFPTT_ALL,
-                command=ryu_ofp13.OFPFC_DELETE,
-                out_group=ryu_ofp13.OFPG_ANY,
-                out_port=ryu_ofp13.OFPP_ANY,
-                match=match)
-            self.ryu_send_msg(msg)
+        # Do not bind a port if it's already bound
+        cur_tag = self.int_br.db_get_val("Port", port.port_name, "tag")
+        if cur_tag != str(lvm.vlan):
+            self.int_br.set_db_attribute("Port", port.port_name, "tag",
+                                         str(lvm.vlan))
+            if int(port.ofport) != -1:
+                match = self.int_br.ofparser.OFPMatch(in_port=port.ofport)
+                msg = self.int_br.ofparser.OFPFlowMod(
+                    self.int_br.datapath,
+                    table_id=ryu_ofp13.OFPTT_ALL,
+                    command=ryu_ofp13.OFPFC_DELETE,
+                    out_group=ryu_ofp13.OFPG_ANY,
+                    out_port=ryu_ofp13.OFPP_ANY,
+                    match=match)
+                self.ryu_send_msg(msg)
 
     def port_unbound(self, vif_id, net_uuid=None):
         """Unbind port.
@@ -685,12 +687,15 @@ class OFANeutronAgent(sg_rpc.SecurityGroupAgentRpcCallbackMixin):
 
         :param port: a ovs_lib.VifPort object.
         """
-        self.int_br.set_db_attribute("Port", port.port_name, "tag",
-                                     DEAD_VLAN_TAG)
-        match = self.int_br.ofparser.OFPMatch(in_port=int(port.ofport))
-        msg = self.int_br.ofparser.OFPFlowMod(self.int_br.datapath,
-                                              priority=2, match=match)
-        self.ryu_send_msg(msg)
+        # Don't kill a port if it's already dead
+        cur_tag = self.int_br.db_get_val("Port", port.port_name, "tag")
+        if cur_tag != DEAD_VLAN_TAG:
+            self.int_br.set_db_attribute("Port", port.port_name, "tag",
+                                         DEAD_VLAN_TAG)
+            match = self.int_br.ofparser.OFPMatch(in_port=port.ofport)
+            msg = self.int_br.ofparser.OFPFlowMod(self.int_br.datapath,
+                                                  priority=2, match=match)
+            self.ryu_send_msg(msg)
 
     def setup_integration_br(self):
         """Setup the integration bridge.
@@ -952,6 +957,9 @@ class OFANeutronAgent(sg_rpc.SecurityGroupAgentRpcCallbackMixin):
         cur_ports = self.int_br.get_vif_port_set()
         self.int_br_device_count = len(cur_ports)
         port_info = {'current': cur_ports}
+        if updated_ports is None:
+            updated_ports = set()
+        updated_ports.update(self._find_lost_vlan_port(registered_ports))
         if updated_ports:
             # Some updated ports might have been removed in the
             # meanwhile, and therefore should not be processed.
@@ -969,6 +977,30 @@ class OFANeutronAgent(sg_rpc.SecurityGroupAgentRpcCallbackMixin):
         # Remove all the known ports not found on the integration bridge
         port_info['removed'] = registered_ports - cur_ports
         return port_info
+
+    def _find_lost_vlan_port(self, registered_ports):
+        """Return ports which have lost their vlan tag.
+
+        The returned value is a set of port ids of the ports concerned by a
+        vlan tag loss.
+        """
+        port_tags = self.int_br.get_port_tag_dict()
+        changed_ports = set()
+        for lvm in self.local_vlan_map.values():
+            for port in registered_ports:
+                if (
+                    port in lvm.vif_ports
+                    and lvm.vif_ports[port].port_name in port_tags
+                    and port_tags[lvm.vif_ports[port].port_name] != lvm.vlan
+                ):
+                    LOG.info(
+                        _("Port '%(port_name)s' has lost "
+                            "its vlan tag '%(vlan_tag)d'!"),
+                        {'port_name': lvm.vif_ports[port].port_name,
+                         'vlan_tag': lvm.vlan}
+                    )
+                    changed_ports.add(port)
+        return changed_ports
 
     def update_ancillary_ports(self, registered_ports):
         ports = set()
@@ -1158,9 +1190,8 @@ class OFANeutronAgent(sg_rpc.SecurityGroupAgentRpcCallbackMixin):
         resync_removed = False
         # If there is an exception while processing security groups ports
         # will not be wired anyway, and a resync will be triggered
-        self.sg_agent.prepare_devices_filter(port_info.get('added', set()))
-        if port_info.get('updated'):
-            self.sg_agent.refresh_firewall()
+        self.sg_agent.setup_port_filters(port_info.get('added', set()),
+                                         port_info.get('updated', set()))
         # VIF wiring needs to be performed always for 'new' devices.
         # For updated ports, re-wiring is not needed in most cases, but needs
         # to be performed anyway when the admin state of a device is changed.
@@ -1236,7 +1267,8 @@ class OFANeutronAgent(sg_rpc.SecurityGroupAgentRpcCallbackMixin):
 
     def _agent_has_updates(self, polling_manager):
         return (polling_manager.is_polling_required or
-                self.updated_ports)
+                self.updated_ports or
+                self.sg_agent.firewall_refresh_needed())
 
     def _port_info_has_changes(self, port_info):
         return (port_info.get('added') or
@@ -1294,8 +1326,10 @@ class OFANeutronAgent(sg_rpc.SecurityGroupAgentRpcCallbackMixin):
                                 "Elapsed:%(elapsed).3f"),
                               {'iter_num': self.iter_num,
                                'elapsed': time.time() - start})
-                    # notify plugin about port deltas
-                    if self._port_info_has_changes(port_info):
+                    # Secure and wire/unwire VIFs and update their status
+                    # on Neutron server
+                    if (self._port_info_has_changes(port_info) or
+                        self.sg_agent.firewall_refresh_needed()):
                         LOG.debug(_("Starting to process devices in:%s"),
                                   port_info)
                         # If treat devices fails - must resync with plugin

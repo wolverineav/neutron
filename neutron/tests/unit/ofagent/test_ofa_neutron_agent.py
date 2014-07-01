@@ -26,6 +26,7 @@ from oslo.config import cfg
 import testtools
 
 from neutron.agent.linux import ip_lib
+from neutron.agent.linux import ovs_lib
 from neutron.agent.linux import utils
 from neutron.openstack.common import importutils
 from neutron.plugins.common import constants as p_const
@@ -266,39 +267,81 @@ class TestOFANeutronAgent(OFAAgentTestCase):
 
         self.agent.sg_agent = mock.Mock()
 
-    def _mock_port_bound(self, ofport=None):
+    def _mock_port_bound(self, ofport=None, new_local_vlan=None,
+                         old_local_vlan=None):
         port = mock.Mock()
         port.ofport = ofport
         net_uuid = 'my-net-uuid'
-        with mock.patch.object(self.mod_agent.OVSBridge,
-                               'set_db_attribute',
-                               return_value=True):
-            with mock.patch.object(self.agent,
-                                   'ryu_send_msg') as ryu_send_msg_func:
-                self.agent.port_bound(port, net_uuid, 'local', None, None)
-        self.assertEqual(ryu_send_msg_func.called, ofport != -1)
+        if old_local_vlan is not None:
+            self.agent.local_vlan_map[net_uuid] = (
+                self.mod_agent.LocalVLANMapping(
+                    old_local_vlan, None, None, None))
+        with contextlib.nested(
+            mock.patch.object(self.mod_agent.OVSBridge,
+                              'set_db_attribute', return_value=True),
+            mock.patch.object(self.mod_agent.OVSBridge,
+                              'db_get_val', return_value=str(old_local_vlan)),
+            mock.patch.object(self.agent, 'ryu_send_msg')
+        ) as (set_ovs_db_func, get_ovs_db_func, ryu_send_msg_func):
+            self.agent.port_bound(port, net_uuid, 'local', None, None)
+        get_ovs_db_func.assert_called_once_with("Port", mock.ANY, "tag")
+        if new_local_vlan != old_local_vlan:
+            set_ovs_db_func.assert_called_once_with(
+                "Port", mock.ANY, "tag", str(new_local_vlan))
+            if ofport != -1:
+                ryu_send_msg_func.assert_called_once_with(
+                    self.ofparser.OFPFlowMod.return_value)
+            else:
+                self.assertFalse(ryu_send_msg_func.called)
+        else:
+            self.assertFalse(set_ovs_db_func.called)
+            self.assertFalse(ryu_send_msg_func.called)
 
     def test_port_bound_deletes_flows_for_valid_ofport(self):
-        self._mock_port_bound(ofport=1)
+        self._mock_port_bound(ofport=1, new_local_vlan=1)
 
     def test_port_bound_ignores_flows_for_invalid_ofport(self):
-        self._mock_port_bound(ofport=-1)
+        self._mock_port_bound(ofport=-1, new_local_vlan=1)
+
+    def test_port_bound_does_not_rewire_if_already_bound(self):
+        self._mock_port_bound(ofport=-1, new_local_vlan=1, old_local_vlan=1)
+
+    def _test_port_dead(self, cur_tag=None):
+        port = mock.Mock()
+        port.ofport = 1
+        with contextlib.nested(
+            mock.patch.object(self.mod_agent.OVSBridge,
+                              'set_db_attribute', return_value=True),
+            mock.patch.object(self.mod_agent.OVSBridge,
+                              'db_get_val', return_value=cur_tag),
+            mock.patch.object(self.agent, 'ryu_send_msg')
+        ) as (set_ovs_db_func, get_ovs_db_func, ryu_send_msg_func):
+            self.agent.port_dead(port)
+        get_ovs_db_func.assert_called_once_with("Port", mock.ANY, "tag")
+        if cur_tag == self.mod_agent.DEAD_VLAN_TAG:
+            self.assertFalse(set_ovs_db_func.called)
+            self.assertFalse(ryu_send_msg_func.called)
+        else:
+            set_ovs_db_func.assert_called_once_with(
+                "Port", mock.ANY, "tag", str(self.mod_agent.DEAD_VLAN_TAG))
+            ryu_send_msg_func.assert_called_once_with(
+                self.ofparser.OFPFlowMod.return_value)
 
     def test_port_dead(self):
-        with mock.patch.object(self.mod_agent.OVSBridge,
-                               'set_db_attribute',
-                               return_value=True):
-            with mock.patch.object(self.agent,
-                                   'ryu_send_msg') as ryu_send_msg_func:
-                port = mock.Mock()
-                port.ofport = 2
-                self.agent.port_dead(port)
-        self.assertTrue(ryu_send_msg_func.called)
+        self._test_port_dead()
+
+    def test_port_dead_with_port_already_dead(self):
+        self._test_port_dead(self.mod_agent.DEAD_VLAN_TAG)
 
     def mock_scan_ports(self, vif_port_set=None, registered_ports=None,
-                        updated_ports=None):
-        with mock.patch.object(self.agent.int_br, 'get_vif_port_set',
-                               return_value=vif_port_set):
+                        updated_ports=None, port_tags_dict=None):
+        port_tags_dict = port_tags_dict or {}
+        with contextlib.nested(
+            mock.patch.object(self.agent.int_br, 'get_vif_port_set',
+                              return_value=vif_port_set),
+            mock.patch.object(self.agent.int_br, 'get_port_tag_dict',
+                              return_value=port_tags_dict)
+        ):
             return self.agent.scan_ports(registered_ports, updated_ports)
 
     def test_scan_ports_returns_current_only_for_unchanged_ports(self):
@@ -349,6 +392,25 @@ class TestOFANeutronAgent(OFAAgentTestCase):
         expected = dict(current=vif_port_set, updated=set([2]))
         actual = self.mock_scan_ports(vif_port_set, registered_ports,
                                       updated_ports)
+        self.assertEqual(expected, actual)
+
+    def test_update_ports_returns_lost_vlan_port(self):
+        br = self.mod_agent.OVSBridge('br-int', 'fake_helper', self.ryuapp)
+        mac = "ca:fe:de:ad:be:ef"
+        port = ovs_lib.VifPort(1, 1, 1, mac, br)
+        lvm = self.mod_agent.LocalVLANMapping(
+            1, '1', None, 1, {port.vif_id: port})
+        local_vlan_map = {'1': lvm}
+        vif_port_set = set([1, 3])
+        registered_ports = set([1, 2])
+        port_tags_dict = {1: []}
+        expected = dict(
+            added=set([3]), current=vif_port_set,
+            removed=set([2]), updated=set([1])
+        )
+        with mock.patch.dict(self.agent.local_vlan_map, local_vlan_map):
+            actual = self.mock_scan_ports(
+                vif_port_set, registered_ports, port_tags_dict=port_tags_dict)
         self.assertEqual(expected, actual)
 
     def test_treat_devices_added_returns_true_for_missing_device(self):
@@ -437,18 +499,15 @@ class TestOFANeutronAgent(OFAAgentTestCase):
 
     def _test_process_network_ports(self, port_info):
         with contextlib.nested(
-            mock.patch.object(self.agent.sg_agent, "prepare_devices_filter"),
-            mock.patch.object(self.agent.sg_agent, "refresh_firewall"),
+            mock.patch.object(self.agent.sg_agent, "setup_port_filters"),
             mock.patch.object(self.agent, "treat_devices_added_or_updated",
                               return_value=False),
             mock.patch.object(self.agent, "treat_devices_removed",
                               return_value=False)
-        ) as (prep_dev_filter, refresh_fw,
-              device_added_updated, device_removed):
+        ) as (setup_port_filters, device_added_updated, device_removed):
             self.assertFalse(self.agent.process_network_ports(port_info))
-            prep_dev_filter.assert_called_once_with(port_info['added'])
-            if port_info.get('updated'):
-                self.assertEqual(1, refresh_fw.call_count)
+            setup_port_filters.assert_called_once_with(
+                port_info['added'], port_info.get('updated', set()))
             device_added_updated.assert_called_once_with(
                 port_info['added'] | port_info.get('updated', set()))
             device_removed.assert_called_once_with(port_info['removed'])

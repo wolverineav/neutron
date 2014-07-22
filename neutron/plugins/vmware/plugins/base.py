@@ -1697,10 +1697,11 @@ class NsxPluginV2(addr_pair_db.AllowedAddressPairsMixin,
         if port_id:
             port_data = self.get_port(context, port_id)
             # If security groups are present we need to remove them as
-            # this is a router port.
+            # this is a router port and disable port security.
             if port_data['security_groups']:
                 self.update_port(context, port_id,
-                                 {'port': {'security_groups': []}})
+                                 {'port': {'security_groups': [],
+                                           psec.PORTSECURITY: False}})
             nsx_switch_id, nsx_port_id = nsx_utils.get_nsx_switch_and_port_id(
                 context.session, self.cluster, port_id)
             # Unplug current attachment from lswitch port
@@ -2430,12 +2431,10 @@ class NsxPluginV2(addr_pair_db.AllowedAddressPairsMixin,
         :param security_group_rule: list of rules to create
         """
         s = security_group_rule.get('security_group_rules')
-        tenant_id = self._get_tenant_id_for_create(context, s)
 
         # TODO(arosen) is there anyway we could avoid having the update of
         # the security group rules in nsx outside of this transaction?
         with context.session.begin(subtransactions=True):
-            self._ensure_default_security_group(context, tenant_id)
             security_group_id = self._validate_security_group_rules(
                 context, security_group_rule)
             # Check to make sure security group exists

@@ -287,6 +287,14 @@ class TestIpWrapper(base.BaseTestCase):
         self.assertEqual(dev.namespace, 'ns')
         self.assertEqual(dev.name, 'eth0')
 
+    def test_namespace_exists_is_root_helped(self):
+        ip = ip_lib.IPWrapper('sudo')
+        with mock.patch.object(ip.netns._parent, '_execute',
+                               return_value="ns") as execute:
+            ip.ensure_namespace('ns')
+            execute.assert_has_calls(
+                [mock.call('o', 'netns', ['list'], root_helper='sudo')])
+
     def test_ensure_namespace(self):
         with mock.patch.object(ip_lib, 'IPDevice') as ip_dev:
             ip = ip_lib.IPWrapper('sudo')

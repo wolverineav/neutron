@@ -188,7 +188,9 @@ class ServerProxy(object):
             respstr = response.read()
             respdata = respstr
             if response.status in self.success_codes:
-                hash_handler.put_hash(response.getheader(HASH_MATCH_HEADER))
+                hash_value = response.getheader(HASH_MATCH_HEADER)
+                if hash_value is not None:
+                    hash_handler.put_hash(hash_value)
                 try:
                     respdata = json.loads(respstr)
                 except ValueError:

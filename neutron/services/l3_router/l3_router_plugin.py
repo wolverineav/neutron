@@ -69,6 +69,7 @@ class L3RouterPlugin(db_base_plugin_v2.CommonDbMixin,
         self.setup_rpc()
         self.router_scheduler = importutils.import_object(
             cfg.CONF.router_scheduler_driver)
+        self.start_periodic_agent_status_check()
 
     def setup_rpc(self):
         # RPC support

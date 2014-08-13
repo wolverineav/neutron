@@ -14,16 +14,11 @@
 #    under the License.
 import sqlalchemy as sa
 
-from neutron.common import exceptions
 from neutron.db import api as db
 from neutron.db import model_base
 from neutron.openstack.common import log as logging
 
 LOG = logging.getLogger(__name__)
-
-
-class MultipleReadForUpdateCalls(exceptions.NeutronException):
-    message = _("Only one read_for_update call may be made at a time.")
 
 
 class ConsistencyHash(model_base.BASEV2):
@@ -41,9 +36,8 @@ class ConsistencyHash(model_base.BASEV2):
 
 class HashHandler(object):
     '''
-    A wrapper object to keep track of the session and hold the SQL
-    lock between the read and the update to prevent other servers
-    from reading the hash during a transaction.
+    A wrapper object to keep track of the session between the read
+    and the update operations.
     '''
     def __init__(self, context=None, hash_id='1'):
         self.hash_id = hash_id
@@ -52,9 +46,8 @@ class HashHandler(object):
         self.transaction = None
 
     def read_for_update(self):
-        if self.transaction:
-            raise MultipleReadForUpdateCalls()
-        self.transaction = self.session.begin(subtransactions=True)
+        if not self.transaction:
+            self.transaction = self.session.begin(subtransactions=True)
         # REVISIT(kevinbenton): locking here with the DB is prone to deadlocks
         # in various multi-REST-call scenarios (router intfs, flips, etc).
         # Since it doesn't work in Galera deployments anyway, another sync

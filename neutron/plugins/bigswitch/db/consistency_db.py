@@ -52,9 +52,8 @@ class HashHandler(object):
         self.transaction = None
 
     def read_for_update(self):
-        if self.transaction:
-            raise MultipleReadForUpdateCalls()
-        self.transaction = self.session.begin(subtransactions=True)
+        if not self.transaction:
+            self.transaction = self.session.begin(subtransactions=True)
         # REVISIT(kevinbenton): locking here with the DB is prone to deadlocks
         # in various multi-REST-call scenarios (router intfs, flips, etc).
         # Since it doesn't work in Galera deployments anyway, another sync

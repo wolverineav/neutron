@@ -113,7 +113,8 @@ class L3AgentSchedulerDbMixin(l3agentscheduler.L3AgentSchedulerPluginBase,
         down_bindings = (
             context.session.query(RouterL3AgentBinding).
             filter(agents_db.Agent.heartbeat_timestamp < cutoff,
-                   agents_db.Agent.admin_state_up))
+                   agents_db.Agent.admin_state_up,
+                   agents_db.Agent.id == RouterL3AgentBinding.l3_agent_id))
         for binding in down_bindings:
             LOG.warn(_LW("Rescheduling router %(router)s from agent %(agent)s "
                          "because the agent did not report to the server in "

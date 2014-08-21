@@ -16,6 +16,7 @@
 #
 # @author: Swaminathan Vasudevan, Hewlett-Packard
 
+from neutron.db import service_instance_info_db as srv_inst_db
 from neutron.db.vpn import vpn_db
 from neutron.openstack.common import log as logging
 from neutron.plugins.common import constants
@@ -24,7 +25,8 @@ from neutron.services import service_base
 LOG = logging.getLogger(__name__)
 
 
-class VPNPlugin(vpn_db.VPNPluginDb):
+class VPNPlugin(vpn_db.VPNPluginDb,
+                srv_inst_db.ServiceInstanceInfoDbMixin):
 
     """Implementation of the VPN Service Plugin.
 

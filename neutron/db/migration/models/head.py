@@ -45,6 +45,7 @@ from neutron.db import routedserviceinsertion_db  # noqa
 from neutron.db import routerservicetype_db  # noqa
 from neutron.db import securitygroups_db  # noqa
 from neutron.db import servicetype_db  # noqa
+from neutron.db import service_instance_info_db #noqa
 from neutron.db.vpn import vpn_db  # noqa
 from neutron.plugins.bigswitch.db import consistency_db  # noqa
 from neutron.plugins.bigswitch import routerrule_db  # noqa

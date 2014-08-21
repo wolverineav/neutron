@@ -649,6 +649,19 @@ class SecurityGroupRule(BASEV2, HasId,
         primaryjoin="SecurityGroup.id==SecurityGroupRule.remote_group_id")
 
 
+#neutron/db/service_instance_info_db.py
+class ServiceInstanceInfo(BASEV2):
+    """ Represents a neutron service instance info. """
+
+    __tablename__ = 'service_instance_info'
+    id = sa.Column(sa.String(36), primary_key=True)
+    service_name = sa.Column(sa.String(255), nullable=False)
+
+    def __init__(self, id, service_name):
+        self.id = id
+        self.service_name = service_name
+
+
 #neutron/db/vpn/vpn_db.py
 class IPsecPeerCidr(BASEV2):
     cidr = sa.Column(sa.String(32), nullable=False, primary_key=True)

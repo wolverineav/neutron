@@ -235,3 +235,9 @@ class MeteringDbMixin(metering.MeteringPluginBase,
                       filter(l3_db.Router.id.in_(router_ids)))
 
         return self._process_sync_metering_data(labels)
+
+    def create_service_interface(self, context, service_id, service_interface):
+        pass
+
+    def delete_service_interface(self, context, service_id, service_interface):
+        pass

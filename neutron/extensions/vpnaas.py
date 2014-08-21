@@ -89,6 +89,10 @@ class RouterIsNotExternal(qexception.BadRequest):
     message = _("Router %(router_id)s has no external network gateway set")
 
 
+class NotSupportedServiceInterfaceType(qexception.BadRequest):
+    message = _("Service Interface Type %(type)s is not supported")
+
+
 vpn_supported_initiators = ['bi-directional', 'response-only']
 vpn_supported_encryption_algorithms = ['3des', 'aes-128',
                                        'aes-192', 'aes-256']
@@ -398,6 +402,14 @@ class VPNPluginBase(service_base.ServicePluginBase):
 
     def get_plugin_description(self):
         return 'VPN service plugin'
+
+    @abc.abstractmethod
+    def create_service_interface(self, context, service_id, service_interface):
+        pass
+
+    @abc.abstractmethod
+    def delete_service_interface(self, context, service_id, service_interface):
+        pass
 
     @abc.abstractmethod
     def get_vpnservices(self, context, filters=None, fields=None):

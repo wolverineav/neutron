@@ -869,6 +869,15 @@ class TestVpnaas(VPNPluginDbTestCase):
                                           if k in expected),
                                      expected)
 
+                    service_plugin = (manager.NeutronManager.
+                        get_service_plugins()[constants.VPN])
+                    adminContext = context.get_admin_context()
+                    srv_instance = service_plugin.get_service_instance_info(
+                        adminContext, vpnservice['vpnservice']['id'])
+                    self.assertTrue(srv_instance)
+                    self.assertEqual(constants.VPN,
+                                     srv_instance['service_name'])
+
     def test_update_vpnservice(self):
         """Test case to update a vpnservice."""
         name = 'new_vpnservice1'
@@ -928,6 +937,14 @@ class TestVpnaas(VPNPluginDbTestCase):
                                           vpnservice['vpnservice']['id'])
             res = req.get_response(self.ext_api)
             self.assertEqual(res.status_int, 204)
+
+            # make sure the service_instance_info is empty
+            service_plugin = (manager.NeutronManager.
+                get_service_plugins()[constants.VPN])
+            adminContext = context.get_admin_context()
+            srv_instances = service_plugin.get_service_instance_infos(
+                adminContext)
+            self.assertFalse(srv_instances)
 
     def test_show_vpnservice(self):
         """Test case to show or get a vpnservice."""

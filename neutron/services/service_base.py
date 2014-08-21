@@ -54,6 +54,16 @@ class ServicePluginBase(extensions.PluginInterface):
         """Return string description of the plugin."""
         pass
 
+    @abc.abstractmethod
+    def create_service_interface(self, context, service_id, service_interface):
+        """Create a service interface on a service instance."""
+        pass
+
+    @abc.abstractmethod
+    def delete_service_interface(self, context, service_id, service_interface):
+        """Delete a service interface from a service instance."""
+        pass
+
 
 def load_drivers(service_type, plugin):
     """Loads drivers for specific service.

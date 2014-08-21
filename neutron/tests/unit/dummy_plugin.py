@@ -107,6 +107,12 @@ class DummyServicePlugin(service_base.ServicePluginBase):
     def get_plugin_description(self):
         return "Neutron Dummy Service Plugin"
 
+    def create_service_interface(self, context, service_id, service_interface):
+        pass
+
+    def delete_service_interface(self, context, service_id, service_interface):
+        pass
+
     def get_dummys(self, context, filters, fields):
         return self.dummys.values()
 

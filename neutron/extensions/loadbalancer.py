@@ -410,6 +410,14 @@ class LoadBalancerPluginBase(service_base.ServicePluginBase):
         return 'LoadBalancer service plugin'
 
     @abc.abstractmethod
+    def create_service_interface(self, context, service_id, service_interface):
+        pass
+
+    @abc.abstractmethod
+    def delete_service_interface(self, context, service_id, service_interface):
+        pass
+
+    @abc.abstractmethod
     def get_vips(self, context, filters=None, fields=None):
         pass
 

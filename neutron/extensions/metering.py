@@ -146,6 +146,14 @@ class MeteringPluginBase(service_base.ServicePluginBase):
         return constants.METERING
 
     @abc.abstractmethod
+    def create_service_interface(self, context, service_id, service_interface):
+        pass
+
+    @abc.abstractmethod
+    def delete_service_interface(self, context, service_id, service_interface):
+        pass
+
+    @abc.abstractmethod
     def create_metering_label(self, context, metering_label):
         """Create a metering label."""
         pass

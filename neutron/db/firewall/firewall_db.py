@@ -483,3 +483,9 @@ class Firewall_db_mixin(firewall.FirewallPluginBase, base_db.CommonDbMixin):
                     firewall_rule_id=fwr_db['id'],
                     firewall_policy_id=id)
             return self._process_rule_for_policy(context, id, fwr_db, None)
+
+    def create_service_interface(self, context, service_id, service_interface):
+        pass
+
+    def delete_service_interface(self, context, service_id, service_interface):
+        pass

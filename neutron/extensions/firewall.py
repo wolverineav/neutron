@@ -363,6 +363,14 @@ class FirewallPluginBase(service_base.ServicePluginBase):
         return 'Firewall service plugin'
 
     @abc.abstractmethod
+    def create_service_interface(self, context, service_id, service_interface):
+        pass
+
+    @abc.abstractmethod
+    def delete_service_interface(self, context, service_id, service_interface):
+        pass
+
+    @abc.abstractmethod
     def get_firewalls(self, context, filters=None, fields=None):
         pass
 

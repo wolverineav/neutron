@@ -804,3 +804,9 @@ class LoadBalancerPluginDb(loadbalancer.LoadBalancerPluginBase,
         return self._get_collection(context, HealthMonitor,
                                     self._make_health_monitor_dict,
                                     filters=filters, fields=fields)
+
+    def create_service_interface(self, context, service_id, service_interface):
+        pass
+
+    def delete_service_interface(self, context, service_id, service_interface):
+        pass

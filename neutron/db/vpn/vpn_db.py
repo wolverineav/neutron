@@ -21,11 +21,11 @@ from sqlalchemy import orm
 from sqlalchemy.orm import exc
 
 from neutron.common import constants as n_constants
-from neutron.db import common_db_mixin as base_db
 from neutron.db import l3_agentschedulers_db as l3_agent_db
 from neutron.db import l3_db
 from neutron.db import model_base
 from neutron.db import models_v2
+from neutron.db import service_instance_info_db as srv_inst_db
 from neutron.db.vpn import vpn_validator
 from neutron.extensions import vpnaas
 from neutron import manager
@@ -149,7 +149,7 @@ class VPNService(model_base.BASEV2, models_v2.HasId, models_v2.HasTenant):
     subnet_id = sa.Column(sa.String(36), sa.ForeignKey('subnets.id'),
                           nullable=False)
     router_id = sa.Column(sa.String(36), sa.ForeignKey('routers.id'),
-                          nullable=False)
+                          nullable=True)
     subnet = orm.relationship(models_v2.Subnet)
     router = orm.relationship(l3_db.Router)
     ipsec_site_connections = orm.relationship(
@@ -158,7 +158,8 @@ class VPNService(model_base.BASEV2, models_v2.HasId, models_v2.HasTenant):
         cascade="all, delete-orphan")
 
 
-class VPNPluginDb(vpnaas.VPNPluginBase, base_db.CommonDbMixin):
+class VPNPluginDb(vpnaas.VPNPluginBase,
+                  srv_inst_db.ServiceInstanceInfoDbMixin):
     """VPN plugin database class using SQLAlchemy models."""
 
     def _get_validator(self):
@@ -548,13 +549,17 @@ class VPNPluginDb(vpnaas.VPNPluginBase, base_db.CommonDbMixin):
                'status': vpnservice['status']}
         return self._fields(res, fields)
 
+    def _make_vpn_service_instance_info(self, service_id):
+        return {'id': service_id, 'service_name': constants.VPN}
+
     def create_vpnservice(self, context, vpnservice):
         vpns = vpnservice['vpnservice']
         tenant_id = self._get_tenant_id_for_create(context, vpns)
         validator = self._get_validator()
         with context.session.begin(subtransactions=True):
             validator.validate_vpnservice(context, vpns)
-            vpnservice_db = VPNService(id=uuidutils.generate_uuid(),
+            service_id = uuidutils.generate_uuid()
+            vpnservice_db = VPNService(id=service_id,
                                        tenant_id=tenant_id,
                                        name=vpns['name'],
                                        description=vpns['description'],
@@ -563,6 +568,10 @@ class VPNPluginDb(vpnaas.VPNPluginBase, base_db.CommonDbMixin):
                                        admin_state_up=vpns['admin_state_up'],
                                        status=constants.PENDING_CREATE)
             context.session.add(vpnservice_db)
+            self.register_service_instance(
+                context,
+                {'service_instance_info':
+                 self._make_vpn_service_instance_info(service_id)})
         return self._make_vpnservice_dict(vpnservice_db)
 
     def update_vpnservice(self, context, vpnservice_id, vpnservice):
@@ -582,6 +591,7 @@ class VPNPluginDb(vpnaas.VPNPluginBase, base_db.CommonDbMixin):
                 raise vpnaas.VPNServiceInUse(vpnservice_id=vpnservice_id)
             vpns_db = self._get_resource(context, VPNService, vpnservice_id)
             context.session.delete(vpns_db)
+            self.unregister_service_instance(context, vpnservice_id)
 
     def _get_vpnservice(self, context, vpnservice_id):
         return self._get_resource(context, VPNService, vpnservice_id)
@@ -602,6 +612,33 @@ class VPNPluginDb(vpnaas.VPNPluginBase, base_db.CommonDbMixin):
             raise vpnaas.RouterInUseByVPNService(
                 router_id=router_id,
                 vpnservice_id=vpnservices[0]['id'])
+
+    def create_service_interface(self, context, service_id, service_interface):
+        vpnservice = self.get_vpnservice(context, service_id)
+        if not vpnservice:
+            raise vpnaas.VPNServiceNotFound(vpnservice_id=service_id)
+
+        if (service_interface['insertion_type'] !=
+                constants.SERVICE_INTERFACE_SERVICE):
+            raise vpnaas.NotSupportedServiceInterfaceType(
+                type=service_interface['insertion_type'])
+
+        try:
+            self.check_router_in_use(context,
+                                     service_interface['insertion_point_id'])
+        except vpnaas.RouterInUseByVPNService:
+            raise
+
+        vpnservice['router_id'] = service_interface['insertion_point_id']
+        return self.update_vpnservice(self, context, service_id, vpnservice)
+
+    def delete_service_interface(self, context, service_id, service_interface):
+        vpnservice = self.get_vpnservice(context, service_id)
+        if not vpnservice:
+            raise vpnaas.VPNServiceNotFound(vpnservice_id=service_id)
+
+        vpnservice['router_id'] = None
+        return self.update_vpnservice(self, context, service_id, vpnservice)
 
 
 class VPNPluginRpcDbMixin():

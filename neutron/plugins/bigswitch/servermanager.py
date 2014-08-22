@@ -133,7 +133,7 @@ class ServerProxy(object):
         headers['NeutronProxy-Agent'] = self.name
         headers['Instance-ID'] = self.neutron_id
         headers['Orchestration-Service-ID'] = ORCHESTRATION_SERVICE_ID
-        if hash_handler:
+        if hash_handler and cfg.CONF.RESTPROXY.auto_sync_on_failure:
             # this will be excluded on calls that don't need hashes
             # (e.g. topology sync, capability checks)
             headers[HASH_MATCH_HEADER] = hash_handler.read_for_update()

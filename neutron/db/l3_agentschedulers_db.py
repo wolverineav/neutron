@@ -124,6 +124,7 @@ class L3AgentSchedulerDbMixin(l3agentscheduler.L3AgentSchedulerPluginBase,
                       'dead_time': agent_dead_limit})
             self.remove_router_from_l3_agent(
                 context, binding.l3_agent_id, binding.router_id)
+            self.schedule_router(context, binding.router_id)
 
     def add_router_to_l3_agent(self, context, agent_id, router_id):
         """Add a l3 agent to host a router."""
@@ -167,13 +168,12 @@ class L3AgentSchedulerDbMixin(l3agentscheduler.L3AgentSchedulerPluginBase,
             query = context.session.query(RouterL3AgentBinding)
             query = query.filter(
                 RouterL3AgentBinding.router_id == router_id,
-                RouterL3AgentBinding.l3_agent_id == agent_id)
-            try:
-                binding = query.one()
-            except exc.NoResultFound:
+                RouterL3AgentBinding.l3_agent_id == agent_id).all()
+            if not query:
                 raise l3agentscheduler.RouterNotHostedByL3Agent(
                     router_id=router_id, agent_id=agent_id)
-            context.session.delete(binding)
+            for binding in query:
+                context.session.delete(binding)
         l3_notifier = self.agent_notifiers.get(constants.AGENT_TYPE_L3)
         if l3_notifier:
             l3_notifier.router_removed_from_agent(

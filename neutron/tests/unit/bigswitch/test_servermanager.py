@@ -127,7 +127,7 @@ class ServerManagerTests(test_rp.BigSwitchProxyPluginV2TestCase):
                 rv.getresponse.return_value.getheader.return_value = 'EVIL'
                 rv.getresponse.return_value.status = 'GARBAGE'
 
-            # create again should use not use header from delete call
+            # create again should not use header from delete call
             with self.network():
                 callheaders = rv.request.mock_calls[2][1][3]
                 self.assertIn('X-BSN-BVS-HASH-MATCH', callheaders)

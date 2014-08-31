@@ -189,6 +189,7 @@ class ServerProxy(object):
             respdata = respstr
             if response.status in self.success_codes:
                 hash_value = response.getheader(HASH_MATCH_HEADER)
+                # don't clear hash from DB if a hash header wasn't present
                 if hash_value is not None:
                     hash_handler.put_hash(hash_value)
                 try:

@@ -43,18 +43,16 @@ class HashHandler(object):
         self.hash_id = hash_id
         self.session = db.get_session() if not context else context.session
         self.hash_db_obj = None
-        self.transaction = None
 
     def read_for_update(self):
-        if not self.transaction:
-            self.transaction = self.session.begin(subtransactions=True)
         # REVISIT(kevinbenton): locking here with the DB is prone to deadlocks
         # in various multi-REST-call scenarios (router intfs, flips, etc).
         # Since it doesn't work in Galera deployments anyway, another sync
         # mechanism will have to be introduced to prevent inefficient double
         # syncs in HA deployments.
-        res = (self.session.query(ConsistencyHash).
-               filter_by(hash_id=self.hash_id).first())
+        with self.session.begin(subtransactions=True):
+            res = (self.session.query(ConsistencyHash).
+                   filter_by(hash_id=self.hash_id).first())
         if not res:
             return ''
         self.hash_db_obj = res
@@ -62,19 +60,11 @@ class HashHandler(object):
 
     def put_hash(self, hash):
         hash = hash or ''
-        if not self.transaction:
-            self.transaction = self.session.begin(subtransactions=True)
-        if self.hash_db_obj is not None:
-            self.hash_db_obj.hash = hash
-        else:
-            conhash = ConsistencyHash(hash_id=self.hash_id, hash=hash)
-            self.session.merge(conhash)
-        self.close_update_session()
+        with self.session.begin(subtransactions=True):
+            if self.hash_db_obj is not None:
+                self.hash_db_obj.hash = hash
+            else:
+                conhash = ConsistencyHash(hash_id=self.hash_id, hash=hash)
+                self.session.merge(conhash)
         LOG.debug(_("Consistency hash for group %(hash_id)s updated "
                     "to %(hash)s"), {'hash_id': self.hash_id, 'hash': hash})
-
-    def close_update_session(self):
-        if not self.transaction:
-            return
-        self.transaction.commit()
-        self.transaction = None

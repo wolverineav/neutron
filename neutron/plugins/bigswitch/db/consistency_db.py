@@ -12,13 +12,32 @@
 #    WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
 #    License for the specific language governing permissions and limitations
 #    under the License.
+import random
+import re
+import string
+import time
+
+from oslo.config import cfg
 import sqlalchemy as sa
 
-from neutron.db import api as db
 from neutron.db import model_base
+from neutron.openstack.common.db import exception as db_exc
+from neutron.openstack.common.db.sqlalchemy import session
 from neutron.openstack.common import log as logging
 
 LOG = logging.getLogger(__name__)
+# Maximum time in seconds to wait for a single record lock to be released
+# NOTE: The total time waiting may exceed this if there are multiple servers
+# waiting for the same lock
+MAX_LOCK_WAIT_TIME = 60
+
+
+def clear_db():
+    '''Helper to unregister models and clear engine in unit tests.'''
+    if not HashHandler._ENGINE:
+        return
+    ConsistencyHash.metadata.drop_all(HashHandler._ENGINE)
+    HashHandler._ENGINE = None
 
 
 class ConsistencyHash(model_base.BASEV2):
@@ -38,31 +57,123 @@ class HashHandler(object):
     '''
     A wrapper object to keep track of the session between the read
     and the update operations.
+
+    This class needs an SQL engine completely independent of the main
+    neutron connection so rollbacks from consistency hash operations don't
+    affect the parent sessions.
     '''
-    def __init__(self, context=None, hash_id='1'):
+    _ENGINE = None
+
+    def __init__(self, hash_id='1'):
+        if HashHandler._ENGINE is None:
+            HashHandler._ENGINE = session.create_engine(
+                cfg.CONF.database.connection,
+                sqlite_fk=False,
+                mysql_traditional_mode=False)
+            ConsistencyHash.metadata.create_all(HashHandler._ENGINE)
         self.hash_id = hash_id
-        self.session = db.get_session() if not context else context.session
-        self.hash_db_obj = None
+        self.session = session.get_maker(HashHandler._ENGINE)()
+        self.random_lock_id = ''.join(random.choice(string.ascii_uppercase
+                                                    + string.digits)
+                                      for _ in range(10))
+        self.lock_marker = 'LOCKED_BY[%s]' % self.random_lock_id
 
     def read_for_update(self):
-        # REVISIT(kevinbenton): locking here with the DB is prone to deadlocks
-        # in various multi-REST-call scenarios (router intfs, flips, etc).
-        # Since it doesn't work in Galera deployments anyway, another sync
-        # mechanism will have to be introduced to prevent inefficient double
-        # syncs in HA deployments.
+        # an optimistic locking strategy with a timeout to avoid using a
+        # consistency hash while another server is using it.
+        lock_wait_start = None
+        last_lock_owner = None
+        while True:
+            try:
+                update = False
+                with self.session.begin(subtransactions=True):
+                    res = (self.session.query(ConsistencyHash).
+                           filter_by(hash_id=self.hash_id).first())
+                    if not res:
+                        res = ConsistencyHash(hash_id=self.hash_id,
+                                              hash=self.lock_marker)
+                        self.session.add(res)
+                        break
+                self.session.refresh(res)  # make sure latest is loaded from db
+                LOG.debug("My lock ID is %s. Current hash is %s" % (
+                          self.random_lock_id, res.hash))
+                matches = re.findall("^LOCKED_BY\[(\w+)\]", res.hash)
+                if matches:
+                    current_lock_owner = matches[0]
+                    if current_lock_owner == self.random_lock_id:
+                        # no change needed, we already have the table lock
+                        break
+                    if current_lock_owner != last_lock_owner:
+                        # the owner changed, but it wasn't to us.
+                        # reset the counter and log if not first time.
+                        if lock_wait_start:
+                            LOG.debug("Lock owner changed from %s to %s while "
+                                      "waiting to acquire it.",
+                                      (last_lock_owner, current_lock_owner))
+                        lock_wait_start = time.time()
+                        last_lock_owner = current_lock_owner
+                    if time.time() - lock_wait_start > MAX_LOCK_WAIT_TIME:
+                        # the lock has been held too long, steal it
+                        LOG.warning(_("Gave up waiting for consistency DB "
+                                      "lock, taking it from current holder. "
+                                      "Current hash is: %s"), res.hash)
+                        update = res.hash.replace(current_lock_owner,
+                                                  self.random_lock_id)
+                else:
+                    # no current lock
+                    update = self.lock_marker + res.hash
+
+                if update:
+                    # need to check update row count in case another server is
+                    # doing this at the same time. Only one can succeed.
+                    query = sa.update(ConsistencyHash.__table__).values(
+                        hash=update)
+                    query = query.where(ConsistencyHash.hash_id == res.hash_id)
+                    query = query.where(ConsistencyHash.hash == res.hash)
+                    with self._ENGINE.begin() as conn:
+                        result = conn.execute(query)
+                    if result.rowcount == 1:
+                        # we successfully updated the table with our lock
+                        break
+                    # someone else beat us to it. timers will be reset on next
+                    # iteration due to lock ID change
+                    LOG.debug("Failed to acquire lock. Restarting lock wait. "
+                              "Previous hash: %s. Update: %s" %
+                              (res.hash, update))
+                time.sleep(0.25)
+            except db_exc.DBDuplicateEntry:
+                # another server created a new record at the same time
+                # retry process after waiting
+                LOG.debug("Concurrent record inserted. Retrying.")
+                time.sleep(0.25)
+
+        ret = (update.replace(self.lock_marker, '')
+               if update else res.hash.replace(self.lock_marker, ''))
+        LOG.debug("Returning hash header %s", ret)
+        return ret
+
+    def clear_lock(self):
+        LOG.debug("Clearing hash record lock of id %s" % self.random_lock_id)
         with self.session.begin(subtransactions=True):
             res = (self.session.query(ConsistencyHash).
                    filter_by(hash_id=self.hash_id).first())
-        if not res:
-            return ''
-        self.hash_db_obj = res
-        return res.hash
+            if not res:
+                LOG.warning(_("Hash record already gone, no lock to clear."))
+                return
+            if not res.hash.startswith(self.lock_marker):
+                # if these are frequent the server is too slow
+                LOG.warning(_("Another server has already taken the lock. %s"),
+                            res.hash)
+                return
+            res.hash = res.hash.replace(self.lock_marker, '')
 
     def put_hash(self, hash):
         hash = hash or ''
         with self.session.begin(subtransactions=True):
-            if self.hash_db_obj is not None:
-                self.hash_db_obj.hash = hash
+            res = (self.session.query(ConsistencyHash).
+                   filter_by(hash_id=self.hash_id).first())
+            if res:
+                res.hash = hash
             else:
                 conhash = ConsistencyHash(hash_id=self.hash_id, hash=hash)
                 self.session.merge(conhash)

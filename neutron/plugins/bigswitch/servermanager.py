@@ -195,11 +195,17 @@ class ServerProxy(object):
                 # don't clear hash from DB if a hash header wasn't present
                 if hash_value is not None:
                     hash_handler.put_hash(hash_value)
+                else:
+                    hash_handler.clear_lock()
                 try:
                     respdata = json.loads(respstr)
                 except ValueError:
                     # response was not JSON, ignore the exception
                     pass
+            else:
+                # release lock so others don't have to wait for timeout
+                hash_handler.clear_lock()
+
             ret = (response.status, response.reason, respstr, respdata)
         except httplib.HTTPException:
             # If we were using a cached connection, try again with a new one.
@@ -420,7 +426,7 @@ class ServerPool(object):
             # include the requesting context information if available
             cdict = context.to_dict()
             headers[REQ_CONTEXT_HEADER] = json.dumps(cdict)
-        hash_handler = cdb.HashHandler(context=context)
+        hash_handler = cdb.HashHandler()
         good_first = sorted(self.servers, key=lambda x: x.failed)
         first_response = None
         for active_server in good_first:
@@ -440,7 +446,7 @@ class ServerPool(object):
                     raise cfg.Error(_('Server requires synchronization, '
                                       'but no topology function was defined.'))
                 # The hash was incorrect so it needs to be removed
-                hash_handler.put_hash('')
+                hash_handler.put_hash('LOCKED_BY[TOPOSYNC]')
                 data = self.get_topo_function(**self.get_topo_function_args)
                 active_server.rest_call('PUT', TOPOLOGY_PATH, data,
                                         timeout=None)

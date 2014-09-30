@@ -32,7 +32,7 @@ from neutron.db.agentschedulers_db import AgentSchedulerDbMixin
 from neutron.db import model_base
 from neutron.db import models_v2
 from neutron.extensions import l3agentscheduler
-from neutron.openstack.common.gettextutils import _LI, _LW
+from neutron.openstack.common.gettextutils import _LE, _LI, _LW
 from neutron.openstack.common import log as logging
 from neutron.openstack.common import loopingcall
 from neutron.openstack.common import timeutils
@@ -107,28 +107,33 @@ class L3AgentSchedulerDbMixin(l3agentscheduler.L3AgentSchedulerPluginBase,
             time.sleep(agent_dead_limit)
         self._clock_jump_canary = timeutils.utcnow()
 
-        context = n_ctx.get_admin_context()
-        cutoff = timeutils.utcnow() - datetime.timedelta(
-            seconds=agent_dead_limit)
-        down_bindings = (
-            context.session.query(RouterL3AgentBinding).
-            filter(agents_db.Agent.heartbeat_timestamp < cutoff,
-                   agents_db.Agent.admin_state_up,
-                   agents_db.Agent.id == RouterL3AgentBinding.l3_agent_id))
-        for binding in down_bindings:
-            LOG.warn(_LW("Rescheduling router %(router)s from agent %(agent)s "
-                         "because the agent did not report to the server in "
-                         "the last %(dead_time)s seconds."),
-                     {'router': binding.router_id,
-                      'agent': binding.l3_agent_id,
-                      'dead_time': agent_dead_limit})
-            self.remove_router_from_l3_agent(
-                context, binding.l3_agent_id, binding.router_id)
-            agt = self.schedule_router(context, binding.router_id)
-            l3_notifier = self.agent_notifiers.get(constants.AGENT_TYPE_L3)
-            if l3_notifier:
-                l3_notifier.router_added_to_agent(
-                    context, [binding.router_id], agt.host)
+        try:
+            context = n_ctx.get_admin_context()
+            cutoff = timeutils.utcnow() - datetime.timedelta(
+                seconds=agent_dead_limit)
+            down_bindings = (
+                context.session.query(RouterL3AgentBinding).
+                filter(agents_db.Agent.heartbeat_timestamp < cutoff,
+                       agents_db.Agent.admin_state_up,
+                       agents_db.Agent.id == RouterL3AgentBinding.l3_agent_id))
+            for binding in down_bindings:
+                LOG.warn(
+                    _LW("Rescheduling router %(router)s from agent %(agent)s "
+                        "because the agent did not report to the server in "
+                        "the last %(dead_time)s seconds."),
+                    {'router': binding.router_id,
+                     'agent': binding.l3_agent_id,
+                     'dead_time': agent_dead_limit})
+                self.remove_router_from_l3_agent(
+                    context, binding.l3_agent_id, binding.router_id)
+                agt = self.schedule_router(context, binding.router_id)
+                l3_notifier = self.agent_notifiers.get(constants.AGENT_TYPE_L3)
+                if l3_notifier:
+                    l3_notifier.router_added_to_agent(
+                        context, [binding.router_id], agt.host)
+        except Exception:
+            LOG.exception(_LE("Exception encountered during router "
+                              "rescheduling."))
 
     def add_router_to_l3_agent(self, context, agent_id, router_id):
         """Add a l3 agent to host a router."""

@@ -637,6 +637,18 @@ class OvsAgentSchedulerTestCase(OvsAgentSchedulerTestCaseBase):
             ret_b = l3_rpc.sync_routers(self.adminContext, host=L3_HOSTB)
             self.assertFalse(ret_b)
 
+    def test_router_reschedule_ignores_exceptions(self):
+        plugin = manager.NeutronManager.get_service_plugins().get(
+            service_constants.L3_ROUTER_NAT)
+        sched_path = 'neutron.db.l3_agentschedulers_db.'
+        with contextlib.nested(
+            mock.patch(sched_path + 'n_ctx.get_admin_context',
+                       side_effect=ValueError()),
+            mock.patch(sched_path + 'LOG.exception')
+        ) as (ga_mock, exc_mock):
+            plugin.reschedule_routers_from_down_agents()
+            self.assertTrue(exc_mock.called)
+
     def test_router_auto_schedule_with_invalid_router(self):
         with self.router() as router:
             l3_rpc = l3_rpc_base.L3RpcCallbackMixin()

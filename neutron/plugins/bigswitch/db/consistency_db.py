@@ -95,8 +95,8 @@ class HashHandler(object):
                         self.session.add(res)
                         break
                 self.session.refresh(res)  # make sure latest is loaded from db
-                LOG.debug("My lock ID is %s. Current hash is %s" % (
-                          self.random_lock_id, res.hash))
+                LOG.debug("My lock ID is %(mine)s. Current hash is %(cur)s" % {
+                          'mine': self.random_lock_id, 'cur': res.hash})
                 matches = re.findall("^LOCKED_BY\[(\w+)\]", res.hash)
                 if matches:
                     current_lock_owner = matches[0]
@@ -107,9 +107,11 @@ class HashHandler(object):
                         # the owner changed, but it wasn't to us.
                         # reset the counter and log if not first time.
                         if lock_wait_start:
-                            LOG.debug("Lock owner changed from %s to %s while "
-                                      "waiting to acquire it.",
-                                      (last_lock_owner, current_lock_owner))
+                            LOG.debug(
+                                "Lock owner changed from %(last)s to "
+                                "%(current)s while waiting to acquire it.",
+                                {'last': last_lock_owner,
+                                 'current': current_lock_owner})
                         lock_wait_start = time.time()
                         last_lock_owner = current_lock_owner
                     if time.time() - lock_wait_start > MAX_LOCK_WAIT_TIME:
@@ -138,8 +140,8 @@ class HashHandler(object):
                     # someone else beat us to it. timers will be reset on next
                     # iteration due to lock ID change
                     LOG.debug("Failed to acquire lock. Restarting lock wait. "
-                              "Previous hash: %s. Update: %s" %
-                              (res.hash, update))
+                              "Previous hash: %(prev)s. Update: %(update)s" %
+                              {'prev': res.hash, 'update': update})
                 time.sleep(0.25)
             except db_exc.DBDuplicateEntry:
                 # another server created a new record at the same time

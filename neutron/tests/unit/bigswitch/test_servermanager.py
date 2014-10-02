@@ -288,7 +288,8 @@ class ServerManagerTests(test_rp.BigSwitchProxyPluginV2TestCase):
         ):
             # a failed delete call should put a bad hash in the DB
             pl.servers.rest_call('DELETE', '/', '', None, [])
-            self.assertEqual('INCONSISTENT', hash_handler.read_for_update())
+            self.assertEqual('INCONSISTENT,INCONSISTENT',
+                             hash_handler.read_for_update())
 
 
 class TestSockets(test_rp.BigSwitchProxyPluginV2TestCase):

@@ -476,7 +476,7 @@ class ServerPool(object):
         # from the controller. Set the consistency hash to a bad value to
         # trigger a sync on the next check.
         if action == 'DELETE':
-            hash_handler.put_hash('INCONSISTENT')
+            hash_handler.put_hash('INCONSISTENT,INCONSISTENT')
         # All servers failed, reset server list and try again next time
         LOG.error(_('ServerProxy: %(action)s failure for all servers: '
                     '%(server)r'),

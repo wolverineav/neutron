@@ -279,6 +279,17 @@ class ServerManagerTests(test_rp.BigSwitchProxyPluginV2TestCase):
             sleep_call_count = rest_call_count - 1
             tmock.assert_has_calls(sleep_call * sleep_call_count)
 
+    def test_delete_failure_sets_bad_hash(self):
+        pl = NeutronManager.get_plugin()
+        hash_handler = consistency_db.HashHandler()
+        with mock.patch(
+            SERVERMANAGER + '.ServerProxy.rest_call',
+            return_value=(httplib.INTERNAL_SERVER_ERROR, 0, 0, 0)
+        ):
+            # a failed delete call should put a bad hash in the DB
+            pl.servers.rest_call('DELETE', '/', '', None, [])
+            self.assertEqual('INCONSISTENT', hash_handler.read_for_update())
+
 
 class TestSockets(test_rp.BigSwitchProxyPluginV2TestCase):
 

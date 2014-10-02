@@ -472,6 +472,11 @@ class ServerPool(object):
                            'data': ret[3]})
                 active_server.failed = True
 
+        # A failure on a delete means the object is gone from Neutron but not
+        # from the controller. Set the consistency hash to a bad value to
+        # trigger a sync on the next check.
+        if action == 'DELETE':
+            hash_handler.put_hash('INCONSISTENT')
         # All servers failed, reset server list and try again next time
         LOG.error(_('ServerProxy: %(action)s failure for all servers: '
                     '%(server)r'),

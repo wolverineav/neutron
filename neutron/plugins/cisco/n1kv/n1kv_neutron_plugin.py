@@ -112,8 +112,9 @@ class N1kvNeutronPluginV2(db_base_plugin_v2.NeutronDbPluginV2,
         Initialize Nexus1000V Neutron plugin.
 
         1. Initialize VIF type to OVS
-        2. Initialize Nexus1000v and Credential DB
-        3. Establish communication with Cisco Nexus1000V
+        2. clear N1kv credential
+        3. Initialize Nexus1000v and Credential DB
+        4. Establish communication with Cisco Nexus1000V
         """
         super(N1kvNeutronPluginV2, self).__init__()
         self.base_binding_dict = {
@@ -122,6 +123,7 @@ class N1kvNeutronPluginV2(db_base_plugin_v2.NeutronDbPluginV2,
                 # TODO(rkukura): Replace with new VIF security details
                 portbindings.CAP_PORT_FILTER:
                 'security-group' in self.supported_extension_aliases}}
+        network_db_v2.delete_all_n1kv_credentials()
         c_cred.Store.initialize()
         self._setup_vsm()
         self._setup_rpc()
@@ -1319,6 +1321,10 @@ class N1kvNeutronPluginV2(db_base_plugin_v2.NeutronDbPluginV2,
                       self).delete_subnet(context, sub['id'])
         else:
             LOG.debug(_("Created subnet: %s"), sub['id'])
+            if not q_conf.CONF.network_auto_schedule:
+                # Schedule network to a DHCP agent
+                net = self.get_network(context, sub['network_id'])
+                self.schedule_network(context, net)
             return sub
 
     def update_subnet(self, context, id, subnet):

@@ -526,8 +526,6 @@ class L3NATAgent(firewall_l3_agent.FWaaSL3AgentRpcCallback,
         self.context = context.get_admin_context_without_session()
         self.plugin_rpc = L3PluginApi(topics.L3PLUGIN, host)
         self.fullsync = True
-        self.updated_routers = set()
-        self.removed_routers = set()
         self.sync_progress = False
 
         # Get the list of service plugins from Neutron Server
@@ -1781,7 +1779,7 @@ class L3NATAgent(firewall_l3_agent.FWaaSL3AgentRpcCallback,
         LOG.debug(_('Got router added to agent :%r'), payload)
         self.routers_updated(context, payload)
 
-    def _process_routers(self, routers, all_routers=False):
+    def _process_routers(self, routers):
         pool = eventlet.GreenPool()
         if (self.conf.external_network_bridge and
             not ip_lib.device_exists(self.conf.external_network_bridge)):
@@ -1795,11 +1793,8 @@ class L3NATAgent(firewall_l3_agent.FWaaSL3AgentRpcCallback,
         # routers which should be removed.
         # If routers are from server side notification, we seek them
         # from subset of incoming routers and ones we have now.
-        if all_routers:
-            prev_router_ids = set(self.router_info)
-        else:
-            prev_router_ids = set(self.router_info) & set(
-                [router['id'] for router in routers])
+        prev_router_ids = set(self.router_info) & set(
+            [router['id'] for router in routers])
         cur_router_ids = set()
         for r in routers:
             # If namespaces are disabled, only process the router associated
@@ -1859,12 +1854,6 @@ class L3NATAgent(firewall_l3_agent.FWaaSL3AgentRpcCallback,
         while True:
             pool.spawn_n(self._process_router_update)
 
-    def _process_router_delete(self):
-        current_removed_routers = list(self.removed_routers)
-        for router_id in current_removed_routers:
-            self._router_removed(router_id)
-            self.removed_routers.remove(router_id)
-
     def _router_ids(self):
         if not self.conf.use_namespaces:
             return [self.conf.router_id]
@@ -1890,8 +1879,6 @@ class L3NATAgent(firewall_l3_agent.FWaaSL3AgentRpcCallback,
 
         try:
             router_ids = self._router_ids()
-            self.updated_routers.clear()
-            self.removed_routers.clear()
             timestamp = timeutils.utcnow()
             routers = self.plugin_rpc.get_routers(
                 context, router_ids)

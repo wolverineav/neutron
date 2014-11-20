@@ -32,7 +32,7 @@ class rpcApiTestCase(base.BaseTestCase):
     def _test_mlnx_api(self, rpcapi, topic, method, rpc_method,
                        expected_msg=None, **kwargs):
         ctxt = context.RequestContext('fake_user', 'fake_project')
-        expected_retval = 'foo' if method == 'call' else None
+        expected_retval = 'foo' if rpc_method == 'call' else None
         expected_kwargs = {}
         if topic:
             expected_kwargs['topic'] = topic
@@ -40,8 +40,6 @@ class rpcApiTestCase(base.BaseTestCase):
             expected_kwargs['version'] = kwargs.pop('version')
         if not expected_msg:
             expected_msg = rpcapi.make_msg(method, **kwargs)
-        if rpc_method == 'cast' and method == 'run_instance':
-            kwargs['call'] = False
 
         self.fake_args = None
         self.fake_kwargs = None

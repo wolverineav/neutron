@@ -34,11 +34,9 @@ class rpcHyperVApiTestCase(base.BaseTestCase):
     def _test_hyperv_neutron_api(
             self, rpcapi, topic, method, rpc_method, **kwargs):
         ctxt = context.RequestContext('fake_user', 'fake_project')
-        expected_retval = 'foo' if method == 'call' else None
+        expected_retval = 'foo' if rpc_method == 'call' else None
         expected_version = kwargs.pop('version', None)
         expected_msg = rpcapi.make_msg(method, **kwargs)
-        if rpc_method == 'cast' and method == 'run_instance':
-            kwargs['call'] = False
 
         proxy = n_rpc.RpcProxy
         with mock.patch.object(proxy, rpc_method) as rpc_method_mock:

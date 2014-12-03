@@ -1,3 +1,4 @@
+neutron/tests/unit/bigswitch/test_servermanager.py
 # vim: tabstop=4 shiftwidth=4 softtabstop=4
 # Copyright 2014 Big Switch Networks, Inc.
 # All Rights Reserved.
@@ -473,6 +474,8 @@ class ServerPool(object):
         # A failure on a delete means the object is gone from Neutron but not
         # from the controller. Set the consistency hash to a bad value to
         # trigger a sync on the next check.
+        # NOTE: The hash must have a comma in it otherwise it will be ignored
+        # by the backend.
         if action == 'DELETE':
             hash_handler.put_hash('INCONSISTENT,INCONSISTENT')
         # All servers failed, reset server list and try again next time

@@ -179,7 +179,7 @@ class L3AgentSchedulerPluginBase(object):
         pass
 
     @abstractmethod
-    def remove_router_from_l3_agent(self, context, id, router_id):
+    def remove_router_from_l3_agent(self, context, id, router_id, notify):
         pass
 
     @abstractmethod

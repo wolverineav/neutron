@@ -124,9 +124,15 @@ class L3AgentSchedulerDbMixin(l3agentscheduler.L3AgentSchedulerPluginBase,
                     {'router': binding.router_id,
                      'agent': binding.l3_agent_id,
                      'dead_time': agent_dead_limit})
-                self.remove_router_from_l3_agent(
-                    context, binding.l3_agent_id, binding.router_id)
-                agt = self.schedule_router(context, binding.router_id)
+                with context.session.begin(subtransactions=True):
+                    self.remove_router_from_l3_agent(
+                        context, binding.l3_agent_id, binding.router_id,
+                        notify=False)
+                    agt = self.schedule_router(context, binding.router_id)
+                    if not agt:
+                        raise l3agentscheduler.RouterSchedulingFailed(
+                            router_id=binding.router_id,
+                            agent_id=' : Could not find active agent')
                 l3_notifier = self.agent_notifiers.get(constants.AGENT_TYPE_L3)
                 if l3_notifier:
                     l3_notifier.router_added_to_agent(
@@ -166,7 +172,8 @@ class L3AgentSchedulerDbMixin(l3agentscheduler.L3AgentSchedulerPluginBase,
             l3_notifier.router_added_to_agent(
                 context, [router_id], agent_db.host)
 
-    def remove_router_from_l3_agent(self, context, agent_id, router_id):
+    def remove_router_from_l3_agent(self, context, agent_id, router_id,
+                                    notify=True):
         """Remove the router from l3 agent.
 
         After removal, the router will be non-hosted until there is update
@@ -183,6 +190,8 @@ class L3AgentSchedulerDbMixin(l3agentscheduler.L3AgentSchedulerPluginBase,
                     router_id=router_id, agent_id=agent_id)
             for binding in query:
                 context.session.delete(binding)
+        if not notify:
+            return
         l3_notifier = self.agent_notifiers.get(constants.AGENT_TYPE_L3)
         if l3_notifier:
             l3_notifier.router_removed_from_agent(

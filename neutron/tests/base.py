@@ -25,10 +25,8 @@ errors due to duplicate configuration definitions.
 
 import logging as std_logging
 import os.path
-import sys
 
 import fixtures
-import mock
 from oslo.config import cfg
 from oslo.messaging import conffixture as messaging_conffixture
 
@@ -97,10 +95,6 @@ class BaseTestCase(sub_base.SubBaseTestCase):
             fake_use_fatal_exceptions))
 
         self.setup_rpc_mocks()
-
-        if sys.version_info < (2, 7) and getattr(self, 'fmt', '') == 'xml':
-            raise self.skipException('XML Testing Skipped in Py26')
-
         self.setup_config()
 
     def setup_rpc_mocks(self):
@@ -108,11 +102,6 @@ class BaseTestCase(sub_base.SubBaseTestCase):
         self.useFixture(fixtures.MonkeyPatch(
             'neutron.common.rpc.Connection.consume_in_threads',
             fake_consume_in_threads))
-
-        # immediately return RPC calls
-        self.useFixture(fixtures.MonkeyPatch(
-            'neutron.common.rpc.RpcProxy._RpcProxy__call_rpc_method',
-            mock.MagicMock()))
 
         self.useFixture(fixtures.MonkeyPatch(
             'oslo.messaging.Notifier', fake_notifier.FakeNotifier))

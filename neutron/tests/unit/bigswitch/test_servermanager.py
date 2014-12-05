@@ -58,7 +58,7 @@ class ServerManagerTests(test_rp.BigSwitchProxyPluginV2TestCase):
                 *('example.org', 443)
             )
             sslgetmock.assert_has_calls([mock.call(
-                  ('example.org', 443), ssl_version=ssl.PROTOCOL_TLSv1)])
+                ('example.org', 443), ssl_version=ssl.PROTOCOL_TLSv1)])
 
     def test_consistency_watchdog_stops_with_0_polling_interval(self):
         pl = NeutronManager.get_plugin()

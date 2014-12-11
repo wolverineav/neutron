@@ -1,4 +1,5 @@
-# Copyright 2014 Red Hat, Inc.
+# Copyright 2012 OpenStack Foundation.
+# All Rights Reserved.
 #
 #    Licensed under the Apache License, Version 2.0 (the "License"); you may
 #    not use this file except in compliance with the License. You may obtain
@@ -12,18 +13,14 @@
 #    License for the specific language governing permissions and limitations
 #    under the License.
 
+from neutron.tests import base
 
-from neutron.agent.l3 import agent
 
+class TestPluginShim(base.BaseTestCase):
 
-class TestL3NATAgent(agent.L3NATAgentWithStateReport):
-    NESTED_NAMESPACE_SEPARATOR = '@'
-
-    def get_ns_name(self, router_id):
-        ns_name = super(TestL3NATAgent, self).get_ns_name(router_id)
-        return "%s%s%s" % (ns_name, self.NESTED_NAMESPACE_SEPARATOR, self.host)
-
-    def get_router_id(self, ns_name):
-        # 'ns_name' should be in the format of: 'qrouter-<id>@<host>'.
-        return super(TestL3NATAgent, self).get_router_id(
-            ns_name.split(self.NESTED_NAMESPACE_SEPARATOR)[0])
+    def test_plugin_shim(self):
+        try:
+            from neutron.services.vpn import plugin
+            plugin.VPNDriverPlugin()
+        except ImportError:
+            pass

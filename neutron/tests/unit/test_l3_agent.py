@@ -272,9 +272,11 @@ class TestBasicRouterOperations(base.BaseTestCase):
 
     def test_periodic_sync_routers_task_raise_exception(self):
         agent = l3_agent.L3NATAgent(HOSTNAME, self.conf)
-        self.plugin_api.get_routers.side_effect = Exception()
+        self.plugin_api.get_routers.side_effect = ValueError()
         with mock.patch.object(agent, '_cleanup_namespaces') as f:
-            agent.periodic_sync_routers_task(agent.context)
+            self.assertRaises(ValueError, agent.periodic_sync_routers_task,
+                              agent.context)
+            self.assertTrue(agent.fullsync)
         self.assertFalse(f.called)
 
     def test_periodic_sync_routers_task_call_clean_stale_namespaces(self):
@@ -2250,22 +2252,19 @@ class TestL3AgentEventHandler(base.BaseTestCase):
 
         self.external_process_p.stop()
         ri = l3router.RouterInfo(router_id, None, None)
-        try:
-            with mock.patch(ip_class_path) as ip_mock:
-                self.agent._spawn_metadata_proxy(ri.router_id, ri.ns_name)
-                ip_mock.assert_has_calls([
-                    mock.call('sudo', ri.ns_name),
-                    mock.call().netns.execute([
-                        'neutron-ns-metadata-proxy',
-                        mock.ANY,
-                        mock.ANY,
-                        '--router_id=%s' % router_id,
-                        mock.ANY,
-                        '--metadata_port=%s' % metadata_port,
-                        '--debug',
-                        '--log-file=neutron-ns-metadata-proxy-%s.log' %
-                        router_id
-                    ], addl_env=None)
-                ])
-        finally:
-            self.external_process_p.start()
+        with mock.patch(ip_class_path) as ip_mock:
+            self.agent._spawn_metadata_proxy(ri.router_id, ri.ns_name)
+            ip_mock.assert_has_calls([
+                mock.call('sudo', ri.ns_name),
+                mock.call().netns.execute([
+                    'neutron-ns-metadata-proxy',
+                    mock.ANY,
+                    mock.ANY,
+                    '--router_id=%s' % router_id,
+                    mock.ANY,
+                    '--metadata_port=%s' % metadata_port,
+                    '--debug',
+                    '--log-file=neutron-ns-metadata-proxy-%s.log' %
+                    router_id
+                ], addl_env=None)
+            ])

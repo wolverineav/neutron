@@ -267,8 +267,8 @@ class NeutronDbPluginV2(neutron_plugin_base_v2.NeutronPluginBaseV2,
 
             for pool in pool_qry.filter_by(subnet_id=subnet['id']):
                 # Create a set of all addresses in the pool
-                poolset = netaddr.IPSet(netaddr.iter_iprange(pool['first_ip'],
-                                                             pool['last_ip']))
+                poolset = netaddr.IPSet(netaddr.IPRange(pool['first_ip'],
+                                                        pool['last_ip']))
 
                 # Use set difference to find free addresses in the pool
                 available = poolset - allocations
@@ -1083,10 +1083,7 @@ class NeutronDbPluginV2(neutron_plugin_base_v2.NeutronPluginBaseV2,
         s = subnet['subnet']
 
         if s['gateway_ip'] is attributes.ATTR_NOT_SPECIFIED:
-            if s['ip_version'] == 6 and ipv6_utils.is_slaac_subnet(s):
-                s['gateway_ip'] = None
-            else:
-                s['gateway_ip'] = str(netaddr.IPAddress(net.first + 1))
+            s['gateway_ip'] = str(netaddr.IPAddress(net.first + 1))
 
         if s['allocation_pools'] == attributes.ATTR_NOT_SPECIFIED:
             s['allocation_pools'] = self._allocate_pools_for_subnet(context, s)
@@ -1276,9 +1273,13 @@ class NeutronDbPluginV2(neutron_plugin_base_v2.NeutronPluginBaseV2,
                          filter_by(network_id=subnet['network_id']).
                          with_lockmode('update'))
 
-            # remove network owned ports
+            # Remove network owned ports, and delete IP allocations
+            # for IPv6 addresses which were automatically generated
+            # via SLAAC
+            is_ipv6_slaac_subnet = ipv6_utils.is_slaac_subnet(subnet)
             for a in allocated:
-                if a.ports.device_owner in AUTO_DELETE_PORT_OWNERS:
+                if (is_ipv6_slaac_subnet or
+                    a.ports.device_owner in AUTO_DELETE_PORT_OWNERS):
                     NeutronDbPluginV2._delete_ip_allocation(
                         context, subnet.network_id, id, a.ip_address)
                 else:

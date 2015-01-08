@@ -2641,6 +2641,36 @@ class TestSubnetsV2(NeutronDbPluginV2TestCase):
                     self.assertEqual(res.status_int,
                                      webob.exc.HTTPNoContent.code)
 
+    def test_delete_subnet_ipv6_slaac_port_exists(self):
+        """Test IPv6 SLAAC subnet delete when a port is still using subnet."""
+        res = self._create_network(fmt=self.fmt, name='net',
+                                   admin_state_up=True)
+        network = self.deserialize(self.fmt, res)
+        # Create an IPv6 SLAAC subnet and a port using that subnet
+        subnet = self._make_subnet(self.fmt, network, gateway='fe80::1',
+                                   cidr='fe80::/64', ip_version=6,
+                                   ipv6_ra_mode=constants.IPV6_SLAAC,
+                                   ipv6_address_mode=constants.IPV6_SLAAC)
+        res = self._create_port(self.fmt, net_id=network['network']['id'])
+        port = self.deserialize(self.fmt, res)
+        self.assertEqual(1, len(port['port']['fixed_ips']))
+
+        # The port should have an address from the subnet
+        req = self.new_show_request('ports', port['port']['id'], self.fmt)
+        res = req.get_response(self.api)
+        sport = self.deserialize(self.fmt, req.get_response(self.api))
+        self.assertEqual(1, len(sport['port']['fixed_ips']))
+
+        # Delete the subnet
+        req = self.new_delete_request('subnets', subnet['subnet']['id'])
+        res = req.get_response(self.api)
+        self.assertEqual(webob.exc.HTTPNoContent.code, res.status_int)
+        # The port should no longer have an address from the deleted subnet
+        req = self.new_show_request('ports', port['port']['id'], self.fmt)
+        res = req.get_response(self.api)
+        sport = self.deserialize(self.fmt, req.get_response(self.api))
+        self.assertEqual(0, len(sport['port']['fixed_ips']))
+
     def test_delete_network(self):
         gateway_ip = '10.0.0.1'
         cidr = '10.0.0.0/24'
@@ -2870,8 +2900,8 @@ class TestSubnetsV2(NeutronDbPluginV2TestCase):
                                  cidr=cidr, ip_version=6,
                                  ipv6_ra_mode=constants.DHCPV6_STATEFUL,
                                  ipv6_address_mode=constants.DHCPV6_STATEFUL)
-        # Gateway not specified for IPv6 SLAAC subnet
-        expected = {'gateway_ip': None,
+        # If gateway_ip is not specified, allocate first IP from the subnet
+        expected = {'gateway_ip': gateway,
                     'cidr': cidr}
         self._test_create_subnet(expected=expected,
                                  cidr=cidr, ip_version=6,
@@ -4028,22 +4058,8 @@ class TestNeutronDbPluginV2(base.BaseTestCase):
         self.assertEqual(2, generate.call_count)
         rebuild.assert_called_once_with('c', 's')
 
-    def test_rebuild_availability_ranges(self):
-        pools = [{'id': 'a',
-                  'first_ip': '192.168.1.3',
-                  'last_ip': '192.168.1.10'},
-                 {'id': 'b',
-                  'first_ip': '192.168.1.100',
-                  'last_ip': '192.168.1.120'}]
-
-        allocations = [{'ip_address': '192.168.1.3'},
-                       {'ip_address': '192.168.1.78'},
-                       {'ip_address': '192.168.1.7'},
-                       {'ip_address': '192.168.1.110'},
-                       {'ip_address': '192.168.1.11'},
-                       {'ip_address': '192.168.1.4'},
-                       {'ip_address': '192.168.1.111'}]
-
+    def _validate_rebuild_availability_ranges(self, pools, allocations,
+                                              expected):
         ip_qry = mock.Mock()
         ip_qry.with_lockmode.return_value = ip_qry
         ip_qry.filter_by.return_value = allocations
@@ -4069,11 +4085,61 @@ class TestNeutronDbPluginV2(base.BaseTestCase):
         actual = [[args[0].allocation_pool_id,
                    args[0].first_ip, args[0].last_ip]
                   for _name, args, _kwargs in context.session.add.mock_calls]
+        self.assertEqual(expected, actual)
 
-        self.assertEqual([['a', '192.168.1.5', '192.168.1.6'],
-                          ['a', '192.168.1.8', '192.168.1.10'],
-                          ['b', '192.168.1.100', '192.168.1.109'],
-                          ['b', '192.168.1.112', '192.168.1.120']], actual)
+    def test_rebuild_availability_ranges(self):
+        pools = [{'id': 'a',
+                  'first_ip': '192.168.1.3',
+                  'last_ip': '192.168.1.10'},
+                 {'id': 'b',
+                  'first_ip': '192.168.1.100',
+                  'last_ip': '192.168.1.120'}]
+
+        allocations = [{'ip_address': '192.168.1.3'},
+                       {'ip_address': '192.168.1.78'},
+                       {'ip_address': '192.168.1.7'},
+                       {'ip_address': '192.168.1.110'},
+                       {'ip_address': '192.168.1.11'},
+                       {'ip_address': '192.168.1.4'},
+                       {'ip_address': '192.168.1.111'}]
+
+        expected = [['a', '192.168.1.5', '192.168.1.6'],
+                    ['a', '192.168.1.8', '192.168.1.10'],
+                    ['b', '192.168.1.100', '192.168.1.109'],
+                    ['b', '192.168.1.112', '192.168.1.120']]
+
+        self._validate_rebuild_availability_ranges(pools, allocations,
+                                                   expected)
+
+    def test_rebuild_ipv6_availability_ranges(self):
+        pools = [{'id': 'a',
+                  'first_ip': '2001::1',
+                  'last_ip': '2001::50'},
+                 {'id': 'b',
+                  'first_ip': '2001::100',
+                  'last_ip': '2001::ffff:ffff:ffff:fffe'}]
+
+        allocations = [{'ip_address': '2001::10'},
+                       {'ip_address': '2001::45'},
+                       {'ip_address': '2001::60'},
+                       {'ip_address': '2001::111'},
+                       {'ip_address': '2001::200'},
+                       {'ip_address': '2001::ffff:ffff:ffff:ff10'},
+                       {'ip_address': '2001::ffff:ffff:ffff:f2f0'}]
+
+        expected = [['a', '2001::1', '2001::f'],
+                    ['a', '2001::11', '2001::44'],
+                    ['a', '2001::46', '2001::50'],
+                    ['b', '2001::100', '2001::110'],
+                    ['b', '2001::112', '2001::1ff'],
+                    ['b', '2001::201', '2001::ffff:ffff:ffff:f2ef'],
+                    ['b', '2001::ffff:ffff:ffff:f2f1',
+                     '2001::ffff:ffff:ffff:ff0f'],
+                    ['b', '2001::ffff:ffff:ffff:ff11',
+                     '2001::ffff:ffff:ffff:fffe']]
+
+        self._validate_rebuild_availability_ranges(pools, allocations,
+                                                   expected)
 
 
 class NeutronDbPluginV2AsMixinTestCase(testlib_api.SqlTestCase):

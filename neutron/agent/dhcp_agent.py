@@ -19,7 +19,6 @@ import sys
 import eventlet
 eventlet.monkey_patch()
 
-import netaddr
 from oslo.config import cfg
 
 from neutron.agent.common import config
@@ -225,16 +224,20 @@ class DhcpAgent(manager.Manager):
 
         enable_metadata = self.dhcp_driver_cls.should_enable_metadata(
                 self.conf, network)
+        dhcp_network_enabled = False
 
         for subnet in network.subnets:
             if subnet.enable_dhcp:
                 if self.call_driver('enable', network):
-                    if (subnet.ip_version == 4 and self.conf.use_namespaces
-                        and enable_metadata):
-                        self.enable_isolated_metadata_proxy(network)
-                        enable_metadata = False  # Don't trigger twice
+                    dhcp_network_enabled = True
                     self.cache.put(network)
                 break
+
+        if enable_metadata and dhcp_network_enabled:
+            for subnet in network.subnets:
+                if subnet.ip_version == 4 and subnet.enable_dhcp:
+                    self.enable_isolated_metadata_proxy(network)
+                    break
 
     def disable_dhcp_helper(self, network_id):
         """Disable DHCP for a network known to the agent."""
@@ -339,10 +342,9 @@ class DhcpAgent(manager.Manager):
         # or all the networks connected via a router
         # to the one passed as a parameter
         neutron_lookup_param = '--network_id=%s' % network.id
-        meta_cidr = netaddr.IPNetwork(dhcp.METADATA_DEFAULT_CIDR)
-        has_metadata_subnet = any(netaddr.IPNetwork(s.cidr) in meta_cidr
-                                  for s in network.subnets)
-        if (self.conf.enable_metadata_network and has_metadata_subnet):
+        # When the metadata network is enabled, the proxy might
+        # be started for the router attached to the network
+        if self.conf.enable_metadata_network:
             router_ports = [port for port in network.ports
                             if (port.device_owner ==
                                 constants.DEVICE_OWNER_ROUTER_INTF)]

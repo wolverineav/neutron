@@ -306,7 +306,7 @@ class NeutronDbPluginV2TestCase(testlib_api.WebTestCase,
                     'dns_nameservers', 'host_routes',
                     'shared', 'ipv6_ra_mode', 'ipv6_address_mode'):
             # Arg must be present and not null (but can be false)
-            if arg in kwargs and kwargs[arg] is not None:
+            if kwargs.get(arg) is not None:
                 data['subnet'][arg] = kwargs[arg]
 
         if ('gateway_ip' in kwargs and
@@ -3192,7 +3192,9 @@ class TestSubnetsV2(NeutronDbPluginV2TestCase):
         ctx = context.get_admin_context(load_admin_roles=False)
         new_subnet = {'ip_version': 6,
                       'cidr': 'fe80::/64',
-                      'enable_dhcp': True}
+                      'enable_dhcp': True,
+                      'ipv6_address_mode': None,
+                      'ipv6_ra_mode': None}
         for mode, value in modes.items():
             new_subnet[mode] = value
         if expect_success:

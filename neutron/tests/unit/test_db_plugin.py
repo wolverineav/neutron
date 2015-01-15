@@ -63,6 +63,17 @@ def _fake_get_sorting_helper(self, request):
     return api_common.SortingEmulatedHelper(request, self._attr_info)
 
 
+# TODO(banix): Move the following method to ML2 db test module when ML2
+# mechanism driver unit tests are corrected to use Ml2PluginV2TestCase
+# instead of directly using NeutronDbPluginV2TestCase
+def _get_create_db_method(resource):
+    ml2_method = '_create_%s_db' % resource
+    if hasattr(manager.NeutronManager.get_plugin(), ml2_method):
+        return ml2_method
+    else:
+        return 'create_%s' % resource
+
+
 class NeutronDbPluginV2TestCase(testlib_api.WebTestCase,
                                 testlib_plugin.PluginSetupHelper):
     fmt = 'json'
@@ -451,15 +462,19 @@ class NeutronDbPluginV2TestCase(testlib_api.WebTestCase,
         res = req.get_response(self._api_for_resource(collection))
         self.assertEqual(res.status_int, expected_code)
 
-    def _show(self, resource, id,
-              expected_code=webob.exc.HTTPOk.code,
-              neutron_context=None):
+    def _show_response(self, resource, id, neutron_context=None):
         req = self.new_show_request(resource, id)
         if neutron_context:
             # create a specific auth context for this request
             req.environ['neutron.context'] = neutron_context
-        res = req.get_response(self._api_for_resource(resource))
-        self.assertEqual(res.status_int, expected_code)
+        return req.get_response(self._api_for_resource(resource))
+
+    def _show(self, resource, id,
+              expected_code=webob.exc.HTTPOk.code,
+              neutron_context=None):
+        res = self._show_response(resource, id,
+                                  neutron_context=neutron_context)
+        self.assertEqual(expected_code, res.status_int)
         return self.deserialize(self.fmt, res)
 
     def _update(self, resource, id, new_data,
@@ -883,8 +898,9 @@ class TestPortsV2(NeutronDbPluginV2TestCase):
         with mock.patch('__builtin__.hasattr',
                         new=fakehasattr):
             orig = manager.NeutronManager.get_plugin().create_port
+            method_to_patch = _get_create_db_method('port')
             with mock.patch.object(manager.NeutronManager.get_plugin(),
-                                   'create_port') as patched_plugin:
+                                   method_to_patch) as patched_plugin:
 
                 def side_effect(*args, **kwargs):
                     return self._fail_second_call(patched_plugin, orig,
@@ -908,7 +924,8 @@ class TestPortsV2(NeutronDbPluginV2TestCase):
         with self.network() as net:
             plugin = manager.NeutronManager.get_plugin()
             orig = plugin.create_port
-            with mock.patch.object(plugin, 'create_port') as patched_plugin:
+            method_to_patch = _get_create_db_method('port')
+            with mock.patch.object(plugin, method_to_patch) as patched_plugin:
 
                 def side_effect(*args, **kwargs):
                     return self._fail_second_call(patched_plugin, orig,
@@ -1781,10 +1798,11 @@ fixed_ips=ip_address%%3D%s&fixed_ips=ip_address%%3D%s&fixed_ips=subnet_id%%3D%s
                     self.assertRaises(n_exc.NeutronException,
                                       plugin.delete_ports_by_device_id,
                                       ctx, 'owner1', network_id)
-                self._show('ports', p1['port']['id'],
-                           expected_code=webob.exc.HTTPNotFound.code)
-                self._show('ports', p2['port']['id'],
-                           expected_code=webob.exc.HTTPOk.code)
+                statuses = {
+                    self._show_response('ports', p['port']['id']).status_int
+                    for p in [p1, p2]}
+                expected = {webob.exc.HTTPNotFound.code, webob.exc.HTTPOk.code}
+                self.assertEqual(expected, statuses)
                 self._show('ports', p3['port']['id'],
                            expected_code=webob.exc.HTTPOk.code)
 
@@ -2073,8 +2091,9 @@ class TestNetworksV2(NeutronDbPluginV2TestCase):
         #ensures the API choose the emulation code path
         with mock.patch('__builtin__.hasattr',
                         new=fakehasattr):
+            method_to_patch = _get_create_db_method('network')
             with mock.patch.object(manager.NeutronManager.get_plugin(),
-                                   'create_network') as patched_plugin:
+                                   method_to_patch) as patched_plugin:
 
                 def side_effect(*args, **kwargs):
                     return self._fail_second_call(patched_plugin, orig,
@@ -2091,8 +2110,9 @@ class TestNetworksV2(NeutronDbPluginV2TestCase):
         if self._skip_native_bulk:
             self.skipTest("Plugin does not support native bulk network create")
         orig = manager.NeutronManager.get_plugin().create_network
+        method_to_patch = _get_create_db_method('network')
         with mock.patch.object(manager.NeutronManager.get_plugin(),
-                               'create_network') as patched_plugin:
+                               method_to_patch) as patched_plugin:
 
             def side_effect(*args, **kwargs):
                 return self._fail_second_call(patched_plugin, orig,
@@ -2513,8 +2533,9 @@ class TestSubnetsV2(NeutronDbPluginV2TestCase):
         with mock.patch('__builtin__.hasattr',
                         new=fakehasattr):
             orig = manager.NeutronManager.get_plugin().create_subnet
+            method_to_patch = _get_create_db_method('subnet')
             with mock.patch.object(manager.NeutronManager.get_plugin(),
-                                   'create_subnet') as patched_plugin:
+                                   method_to_patch) as patched_plugin:
 
                 def side_effect(*args, **kwargs):
                     self._fail_second_call(patched_plugin, orig,
@@ -2536,7 +2557,8 @@ class TestSubnetsV2(NeutronDbPluginV2TestCase):
             self.skipTest("Plugin does not support native bulk subnet create")
         plugin = manager.NeutronManager.get_plugin()
         orig = plugin.create_subnet
-        with mock.patch.object(plugin, 'create_subnet') as patched_plugin:
+        method_to_patch = _get_create_db_method('subnet')
+        with mock.patch.object(plugin, method_to_patch) as patched_plugin:
             def side_effect(*args, **kwargs):
                 return self._fail_second_call(patched_plugin, orig,
                                               *args, **kwargs)

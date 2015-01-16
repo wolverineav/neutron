@@ -472,6 +472,17 @@ class FakeDualStackNetworkSingleDHCP(object):
     ports = [FakePort1(), FakePort4(), FakeRouterPort()]
 
 
+class FakeV4NetworkMultipleTags(object):
+    id = 'dddddddd-dddd-dddd-dddd-dddddddddddd'
+    subnets = [FakeV4Subnet()]
+    ports = [FakePort1(), FakeRouterPort()]
+    namespace = 'qdhcp-ns'
+
+    def __init__(self):
+        self.ports[0].extra_dhcp_opts = [
+            DhcpOpt(opt_name='tag:ipxe,bootfile-name', opt_value='pxelinux.0')]
+
+
 class LocalChild(dhcp.DhcpLocalProcess):
     PORTS = {4: [4], 6: [6]}
 
@@ -793,14 +804,21 @@ class TestDnsmasq(TestBase):
             seconds = 's'
         if has_static:
             prefix = '--dhcp-range=set:tag%d,%s,static,%s%s'
+            prefix6 = '--dhcp-range=set:tag%d,%s,static,%s,%s%s'
         else:
             prefix = '--dhcp-range=set:tag%d,%s,%s%s'
+            prefix6 = '--dhcp-range=set:tag%d,%s,%s,%s%s'
         possible_leases = 0
         for i, s in enumerate(network.subnets):
             if (s.ip_version != 6
                 or s.ipv6_address_mode == constants.DHCPV6_STATEFUL):
-                expected.extend([prefix % (
-                    i, s.cidr.split('/')[0], lease_duration, seconds)])
+                if s.ip_version == 4:
+                    expected.extend([prefix % (
+                        i, s.cidr.split('/')[0], lease_duration, seconds)])
+                else:
+                    expected.extend([prefix6 % (
+                        i, s.cidr.split('/')[0], s.cidr.split('/')[1],
+                        lease_duration, seconds)])
                 possible_leases += netaddr.IPNetwork(s.cidr).size
 
         expected.append('--dhcp-lease-max=%d' % min(
@@ -1055,6 +1073,25 @@ class TestDnsmasq(TestBase):
             'option:bootfile-name,pxelinux3.0').lstrip()
 
         self._test_output_opts_file(expected, FakeDualV4Pxe3Ports())
+
+    def test_output_opts_file_multiple_tags(self):
+        expected = (
+            'tag:tag0,option:dns-server,8.8.8.8\n'
+            'tag:tag0,option:classless-static-route,20.0.0.1/24,20.0.0.1,'
+            '0.0.0.0/0,192.168.0.1\n'
+            'tag:tag0,249,20.0.0.1/24,20.0.0.1,0.0.0.0/0,192.168.0.1\n'
+            'tag:tag0,option:router,192.168.0.1\n'
+            'tag:eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee,'
+            'tag:ipxe,option:bootfile-name,pxelinux.0')
+        expected = expected.lstrip()
+
+        with mock.patch.object(dhcp.Dnsmasq, 'get_conf_file_name') as conf_fn:
+            conf_fn.return_value = '/foo/opts'
+            dm = dhcp.Dnsmasq(self.conf, FakeV4NetworkMultipleTags(),
+                              version=dhcp.Dnsmasq.MINIMUM_VERSION)
+            dm._output_opts_file()
+
+        self.safe.assert_called_once_with('/foo/opts', expected)
 
     @property
     def _test_no_dhcp_domain_alloc_data(self):

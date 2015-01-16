@@ -494,25 +494,30 @@ class L3NATAgent(firewall_l3_agent.FWaaSL3AgentRpcCallback,
             ri.perform_snat_action(self._handle_router_snat_rules,
                                    interface_name)
 
-    def _process_snat_dnat_for_fip(self, ri):
-        ex_gw_port = self._get_ex_gw_port(ri)
-        if not ex_gw_port:
-            return
+    def _put_fips_in_error_state(self, ri):
         fip_statuses = {}
+        for fip in ri.router.get(l3_constants.FLOATINGIP_KEY, []):
+            fip_statuses[fip['id']] = l3_constants.FLOATINGIP_STATUS_ERROR
+        return fip_statuses
+
+    def _process_snat_dnat_for_fip(self, ri):
         try:
-            existing_floating_ips = ri.floating_ips
             self.process_router_floating_ip_nat_rules(ri)
-            ri.iptables_manager.defer_apply_off()
-            # Once NAT rules for floating IPs are safely in place
-            # configure their addresses on the external gateway port
-            fip_statuses = self.process_router_floating_ip_addresses(
+        except Exception:
+            # TODO(salv-orlando): Less broad catching
+            raise n_exc.FloatingIpSetupException('L3 agent failure to setup '
+                'NAT for floating IPs')
+
+    def _configure_fip_addresses(self, ri, ex_gw_port):
+        try:
+            return self.process_router_floating_ip_addresses(
                 ri, ex_gw_port)
         except Exception:
             # TODO(salv-orlando): Less broad catching
-            # All floating IPs must be put in error state
-            for fip in ri.router.get(l3_constants.FLOATINGIP_KEY, []):
-                fip_statuses[fip['id']] = l3_constants.FLOATINGIP_STATUS_ERROR
+            raise n_exc.FloatingIpSetupException('L3 agent failure to setup '
+                'floating IPs')
 
+    def _update_fip_statuses(self, ri, existing_floating_ips, fip_statuses):
         # Identify floating IPs which were disabled
         ri.floating_ips = set(fip_statuses.keys())
         for fip_id in existing_floating_ips - ri.floating_ips:
@@ -528,21 +533,41 @@ class L3NATAgent(firewall_l3_agent.FWaaSL3AgentRpcCallback,
             else:
                 ri.disable_keepalived()
 
+    def _process_external(self, ri):
+        try:
+            with ri.iptables_manager.defer_apply():
+                self._process_external_gateway(ri)
+                ex_gw_port = self._get_ex_gw_port(ri)
+                # TODO(Carl) Return after setting existing_floating_ips and
+                # still call _update_fip_statuses?
+                if not ex_gw_port:
+                    return
+
+                # Process SNAT/DNAT rules and addresses for floating IPs
+                existing_floating_ips = ri.floating_ips
+                if ri.router['distributed']:
+                    self.create_dvr_fip_interfaces(ri, ex_gw_port)
+                self._process_snat_dnat_for_fip(ri)
+
+            # Once NAT rules for floating IPs are safely in place
+            # configure their addresses on the external gateway port
+            fip_statuses = self._configure_fip_addresses(ri, ex_gw_port)
+
+        except (n_exc.FloatingIpSetupException, n_exc.IpTablesApplyException):
+                # All floating IPs must be put in error state
+                fip_statuses = self._put_fips_in_error_state(ri)
+
+        self._update_fip_statuses(ri, existing_floating_ips, fip_statuses)
+
     @common_utils.exception_logger()
     def process_router(self, ri):
         # TODO(mrsmith) - we shouldn't need to check here
         if 'distributed' not in ri.router:
             ri.router['distributed'] = False
-
-        ri.iptables_manager.defer_apply_on()
         self._process_internal_ports(ri)
-        self._process_external_gateway(ri)
-
+        self._process_external(ri)
         # Process static routes for router
         self.routes_updated(ri)
-
-        # Process SNAT/DNAT rules for floating IPs
-        self._process_snat_dnat_for_fip(ri)
 
         # Enable or disable keepalived for ha routers
         self._process_ha_router(ri)
@@ -607,27 +632,25 @@ class L3NATAgent(firewall_l3_agent.FWaaSL3AgentRpcCallback,
 
         ri.iptables_manager.apply()
 
-    def _get_external_device_interface_name(self, ri, ex_gw_port,
-                                            floating_ips):
+    def create_dvr_fip_interfaces(self, ri, ex_gw_port):
+        floating_ips = self.get_floating_ips(ri)
+        if floating_ips:
+            is_first = self._fip_ns_subscribe(ri.router_id)
+            if is_first:
+                self._create_agent_gateway_port(ri, floating_ips[0]
+                                                ['floating_network_id'])
+
+        if self.agent_gateway_port:
+            if floating_ips and ri.dist_fip_count == 0:
+                self.create_rtr_2_fip_link(ri, floating_ips[0]
+                                           ['floating_network_id'])
+
+    def _get_external_device_interface_name(self, ri, ex_gw_port):
         if ri.router['distributed']:
-            # filter out only FIPs for this host/agent
-            floating_ips = [i for i in floating_ips if i['host'] == self.host]
-            if floating_ips:
-                is_first = self._fip_ns_subscribe(ri.router_id)
-                if is_first:
-                    self._create_agent_gateway_port(ri, floating_ips[0]
-                                                    ['floating_network_id'])
-
             if self.agent_gateway_port:
-                if floating_ips and ri.dist_fip_count == 0:
-                    self.create_rtr_2_fip_link(ri, floating_ips[0]
-                                               ['floating_network_id'])
                 return self.get_rtr_int_device_name(ri.router_id)
-            else:
-                # there are no fips or agent port, no work to do
-                return None
-
-        return self.get_external_device_name(ex_gw_port['id'])
+        else:
+            return self.get_external_device_name(ex_gw_port['id'])
 
     def _add_floating_ip(self, ri, fip, interface_name, device):
         fip_ip = fip['floating_ip_address']
@@ -679,9 +702,8 @@ class L3NATAgent(firewall_l3_agent.FWaaSL3AgentRpcCallback,
         """
 
         fip_statuses = {}
-        floating_ips = self.get_floating_ips(ri)
         interface_name = self._get_external_device_interface_name(
-            ri, ex_gw_port, floating_ips)
+            ri, ex_gw_port)
         if interface_name is None:
             return fip_statuses
 
@@ -690,6 +712,7 @@ class L3NATAgent(firewall_l3_agent.FWaaSL3AgentRpcCallback,
         existing_cidrs = set([addr['cidr'] for addr in device.addr.list()])
         new_cidrs = set()
 
+        floating_ips = self.get_floating_ips(ri)
         # Loop once to ensure that floating ips are configured.
         for fip in floating_ips:
             fip_ip = fip['floating_ip_address']

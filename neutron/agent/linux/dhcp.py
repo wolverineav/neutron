@@ -406,9 +406,15 @@ class Dnsmasq(DhcpLocalProcess):
 
             # mode is optional and is not set - skip it
             if mode:
-                cmd.append('--dhcp-range=%s%s,%s,%s,%s' %
-                           ('set:', self._TAG_PREFIX % i,
-                            cidr.network, mode, lease))
+                if subnet.ip_version == 4:
+                    cmd.append('--dhcp-range=%s%s,%s,%s,%s' %
+                               ('set:', self._TAG_PREFIX % i,
+                                cidr.network, mode, lease))
+                else:
+                    cmd.append('--dhcp-range=%s%s,%s,%s,%d,%s' %
+                               ('set:', self._TAG_PREFIX % i,
+                                cidr.network, mode,
+                                cidr.prefixlen, lease))
                 possible_leases += cidr.size
 
         # Cap the limit because creating lots of subnets can inflate
@@ -720,6 +726,10 @@ class Dnsmasq(DhcpLocalProcess):
     def _format_option(self, ip_version, tag, option, *args):
         """Format DHCP option by option name or code."""
         option = str(option)
+        pattern = "(tag:(.*),)?(.*)$"
+        matches = re.match(pattern, option)
+        extra_tag = matches.groups()[0]
+        option = matches.groups()[2]
 
         if isinstance(tag, int):
             tag = self._TAG_PREFIX % tag
@@ -729,8 +739,11 @@ class Dnsmasq(DhcpLocalProcess):
                 option = 'option:%s' % option
             else:
                 option = 'option6:%s' % option
-
-        return ','.join(('tag:' + tag, '%s' % option) + args)
+        if extra_tag:
+            tags = ('tag:' + tag, extra_tag[:-1], '%s' % option)
+        else:
+            tags = ('tag:' + tag, '%s' % option)
+        return ','.join(tags + args)
 
     @staticmethod
     def _convert_to_literal_addrs(ip_version, ips):

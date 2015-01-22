@@ -16,6 +16,7 @@
 import contextlib
 import copy
 import datetime
+import eventlet
 
 import mock
 import netaddr
@@ -427,6 +428,14 @@ class TestBasicRouterOperations(base.BaseTestCase):
         with mock.patch.object(agent, '_cleanup_namespaces') as f:
             agent._sync_routers_task(agent.context)
         self.assertFalse(f.called)
+
+    def test_l3_initial_full_sync_done(self):
+        with mock.patch.object(l3_agent.L3NATAgent,
+                               'periodic_sync_routers_task') as router_sync:
+            with mock.patch.object(eventlet, 'spawn_n'):
+                agent = l3_agent.L3NATAgent(HOSTNAME, self.conf)
+                agent.after_start()
+                router_sync.assert_called_once_with(agent.context)
 
     def test__sync_routers_task_call_clean_stale_namespaces(self):
         agent = l3_agent.L3NATAgent(HOSTNAME, self.conf)
@@ -1161,6 +1170,12 @@ vrrp_instance VR_1 {
              'host': HOSTNAME,
              'floating_ip_address': '15.1.2.3',
              'fixed_ip_address': '192.168.0.1',
+             'floating_network_id': _uuid(),
+             'port_id': _uuid()},
+            {'id': _uuid(),
+             'host': 'some-other-host',
+             'floating_ip_address': '15.1.2.4',
+             'fixed_ip_address': '192.168.0.10',
              'floating_network_id': _uuid(),
              'port_id': _uuid()}]}
 

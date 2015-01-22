@@ -1158,7 +1158,7 @@ class L3NATAgent(firewall_l3_agent.FWaaSL3AgentRpcCallback,
         """
 
         fip_statuses = {}
-        floating_ips = ri.router.get(l3_constants.FLOATINGIP_KEY, [])
+        floating_ips = self.get_floating_ips(ri)
         interface_name = self._get_external_device_interface_name(
             ri, ex_gw_port, floating_ips)
         if interface_name is None:
@@ -1919,6 +1919,8 @@ class L3NATAgent(firewall_l3_agent.FWaaSL3AgentRpcCallback,
     def after_start(self):
         eventlet.spawn_n(self._process_routers_loop)
         LOG.info(_("L3 agent started"))
+        # When L3 agent is ready, we immediately do a full sync
+        self.periodic_sync_routers_task(self.context)
 
     def _update_routing_table(self, ri, operation, route):
         cmd = ['ip', 'route', operation, 'to', route['destination'],

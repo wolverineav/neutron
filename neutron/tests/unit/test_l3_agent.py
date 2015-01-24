@@ -819,6 +819,42 @@ class TestBasicRouterOperations(base.BaseTestCase):
             4, '1.5.25.15', '00:44:33:22:11:55')
         agent.router_deleted(None, router['id'])
 
+    @mock.patch('neutron.agent.linux.ip_lib.IPDevice')
+    def _test_scan_fip_ports(self, ri, ip_list, IPDevice):
+        agent = l3_agent.L3NATAgent(HOSTNAME, self.conf)
+        self.device_exists.return_value = True
+        IPDevice.return_value = device = mock.Mock()
+        device.addr.list.return_value = ip_list
+        agent.scan_fip_ports(ri)
+
+    def test_scan_fip_ports_restart_fips(self):
+        router = prepare_router_data()
+        ri = dvr_router.DvrRouter(router['id'], self.conf.root_helper,
+                                  router=router)
+        ri.router['distributed'] = True
+        ip_list = [{'cidr': '111.2.3.4/32'}, {'cidr': '111.2.3.5/32'}]
+        self._test_scan_fip_ports(ri, ip_list)
+        self.assertEqual(ri.dist_fip_count, 2)
+
+    def test_scan_fip_ports_restart_none(self):
+        router = prepare_router_data()
+        ri = dvr_router.DvrRouter(router['id'], self.conf.root_helper,
+                                  router=router)
+        ri.router['distributed'] = True
+        ip_list = []
+        self._test_scan_fip_ports(ri, ip_list)
+        self.assertEqual(ri.dist_fip_count, 0)
+
+    def test_scan_fip_ports_restart_zero(self):
+        router = prepare_router_data()
+        ri = dvr_router.DvrRouter(router['id'], self.conf.root_helper,
+                                  router=router)
+        ri.router['distributed'] = True
+        ri.dist_fip_count = 0
+        ip_list = None
+        self._test_scan_fip_ports(ri, ip_list)
+        self.assertEqual(ri.dist_fip_count, 0)
+
     def test_process_cent_router(self):
         router = prepare_router_data()
         ri = l3router.RouterInfo(router['id'], self.conf.root_helper,
@@ -827,8 +863,8 @@ class TestBasicRouterOperations(base.BaseTestCase):
 
     def test_process_dist_router(self):
         router = prepare_router_data()
-        ri = l3router.RouterInfo(router['id'], self.conf.root_helper,
-                                 router=router)
+        ri = dvr_router.DvrRouter(router['id'], self.conf.root_helper,
+                                  router=router)
         subnet_id = _get_subnet_id(router[l3_constants.INTERFACE_KEY][0])
         ri.router['distributed'] = True
         ri.router['_snat_router_interfaces'] = [{
@@ -994,6 +1030,7 @@ class TestBasicRouterOperations(base.BaseTestCase):
         ri = dvr_router.DvrRouter(router['id'], self.conf.root_helper,
                                   router=router)
         ri.iptables_manager.ipv4['nat'] = mock.MagicMock()
+        ri.dist_fip_count = 0
         agent = l3_agent.L3NATAgent(HOSTNAME, self.conf)
         agent.host = HOSTNAME
         agent.agent_gateway_port = (
@@ -1006,6 +1043,27 @@ class TestBasicRouterOperations(base.BaseTestCase):
              'ip_cidr': '20.0.0.30/24'}
         )
         self._test_process_router_floating_ip_addresses_add(ri, agent)
+
+    def test_get_router_cidrs_returns_cidrs(self):
+        agent = l3_agent.L3NATAgent(HOSTNAME, self.conf)
+        ri = mock.MagicMock()
+        ri.is_ha = False
+        addresses = ['15.1.2.2/24', '15.1.2.3/32']
+        device = mock.MagicMock()
+        device.addr.list.return_value = [{'cidr': addresses[0]},
+                                         {'cidr': addresses[1]}]
+        self.assertEqual(set(addresses), agent._get_router_cidrs(ri, device))
+
+    def test_get_router_cidrs_returns_ha_cidrs(self):
+        agent = l3_agent.L3NATAgent(HOSTNAME, self.conf)
+        ri = mock.MagicMock()
+        ri.is_ha = True
+        device = mock.MagicMock()
+        device.name.return_value = 'eth2'
+        addresses = ['15.1.2.2/24', '15.1.2.3/32']
+        agent._ha_get_existing_cidrs = mock.MagicMock()
+        agent._ha_get_existing_cidrs.return_value = addresses
+        self.assertEqual(set(addresses), agent._get_router_cidrs(ri, device))
 
     # TODO(mrsmith): refactor for DVR cases
     @mock.patch('neutron.agent.linux.ip_lib.IPDevice')
@@ -1949,6 +2007,7 @@ class TestBasicRouterOperations(base.BaseTestCase):
                'port_id': _uuid()}
         agent.agent_gateway_port = agent_gw_port
         ri.rtr_fip_subnet = lla.LinkLocalAddressPair('169.254.30.42/31')
+        ri.dist_fip_count = 0
         ip_cidr = common_utils.ip_to_cidr(fip['floating_ip_address'])
         agent.floating_ip_added_dist(ri, fip, ip_cidr)
         self.mock_rule.add_rule_from.assert_called_with('192.168.0.1',

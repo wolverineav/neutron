@@ -580,6 +580,7 @@ class L3NATAgent(firewall_l3_agent.FWaaSL3AgentRpcCallback,
         # TODO(mrsmith) - we shouldn't need to check here
         if 'distributed' not in ri.router:
             ri.router['distributed'] = False
+        self.scan_fip_ports(ri)
         self._process_internal_ports(ri)
         self._process_external(ri)
         # Process static routes for router
@@ -656,14 +657,19 @@ class L3NATAgent(firewall_l3_agent.FWaaSL3AgentRpcCallback,
                 self._create_agent_gateway_port(ri, floating_ips[0]
                                                 ['floating_network_id'])
 
-        if self.agent_gateway_port:
-            if floating_ips and ri.dist_fip_count == 0:
-                self.create_rtr_2_fip_link(ri, floating_ips[0]
-                                           ['floating_network_id'])
+        if self.agent_gateway_port and floating_ips:
+            fip_net_id = floating_ips[0]['floating_network_id']
+            self.create_rtr_2_fip_link(ri, fip_net_id)
 
     def _get_external_device_interface_name(self, ri, ex_gw_port):
         if ri.router['distributed']:
-            if self.agent_gateway_port:
+            fip_int = self.get_fip_int_device_name(ri.router_id)
+            # TODO(mrsmith) refactor for multiple ext nets
+            fip_ns = self.get_fip_ns_name(str(self._fetch_external_net_id()))
+
+            if ip_lib.device_exists(fip_int,
+                                    root_helper=self.root_helper,
+                                    namespace=fip_ns):
                 return self.get_rtr_int_device_name(ri.router_id)
         else:
             return self.get_external_device_name(ex_gw_port['id'])
@@ -710,6 +716,12 @@ class L3NATAgent(firewall_l3_agent.FWaaSL3AgentRpcCallback,
             if ri.router['distributed']:
                 self.floating_ip_removed_dist(ri, ip_cidr)
 
+    def _get_router_cidrs(self, ri, device):
+        if ri.is_ha:
+            return set(self._ha_get_existing_cidrs(ri, device.name))
+        else:
+            return set([addr['cidr'] for addr in device.addr.list()])
+
     def process_router_floating_ip_addresses(self, ri, ex_gw_port):
         """Configure IP addresses on router's external gateway interface.
 
@@ -725,7 +737,7 @@ class L3NATAgent(firewall_l3_agent.FWaaSL3AgentRpcCallback,
 
         device = ip_lib.IPDevice(interface_name, self.root_helper,
                                  namespace=ri.ns_name)
-        existing_cidrs = set([addr['cidr'] for addr in device.addr.list()])
+        existing_cidrs = self._get_router_cidrs(ri, device)
         new_cidrs = set()
 
         floating_ips = self.get_floating_ips(ri)

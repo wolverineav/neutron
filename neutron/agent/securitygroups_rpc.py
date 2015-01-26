@@ -21,6 +21,7 @@ from oslo import messaging
 from oslo.utils import importutils
 
 from neutron.agent import firewall
+from neutron.common import constants
 from neutron.common import rpc as n_rpc
 from neutron.common import topics
 from neutron.i18n import _LI, _LW
@@ -95,7 +96,8 @@ class SecurityGroupServerRpcApi(object):
     doc/source/devref/rpc_api.rst.
     """
     def __init__(self, topic):
-        target = messaging.Target(topic=topic, version='1.0')
+        target = messaging.Target(topic=topic, version='1.0',
+                                  namespace=constants.RPC_NAMESPACE_SECGROUP)
         self.client = n_rpc.get_client(target)
 
     def security_group_rules_for_devices(self, context, devices):
@@ -157,10 +159,15 @@ class SecurityGroupAgentRpcCallbackMixin(object):
         self.sg_agent.security_groups_provider_updated()
 
 
-class SecurityGroupAgentRpcMixin(object):
-    """A mix-in that enable SecurityGroup agent
-    support in agent implementations.
-    """
+class SecurityGroupAgentRpc(object):
+    """Enables SecurityGroup agent support in agent implementations."""
+
+    def __init__(self, context, plugin_rpc, root_helper,
+                 defer_refresh_firewall=False):
+        self.context = context
+        self.plugin_rpc = plugin_rpc
+        self.root_helper = root_helper
+        self.init_firewall(defer_refresh_firewall)
 
     def init_firewall(self, defer_refresh_firewall=False):
         firewall_driver = cfg.CONF.SECURITYGROUP.firewall_driver

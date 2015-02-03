@@ -23,6 +23,7 @@ from oslo.utils import timeutils
 
 from neutron.agent.common import config
 from neutron.agent.l3 import dvr
+from neutron.agent.l3 import dvr_fip_ns
 from neutron.agent.l3 import dvr_router
 from neutron.agent.l3 import event_observers
 from neutron.agent.l3 import ha
@@ -274,7 +275,7 @@ class L3NATAgent(firewall_l3_agent.FWaaSL3AgentRpcCallback,
     def _destroy_namespace(self, ns):
         if ns.startswith(NS_PREFIX):
             self._destroy_router_namespace(ns)
-        elif ns.startswith(dvr.FIP_NS_PREFIX):
+        elif ns.startswith(dvr_fip_ns.FIP_NS_PREFIX):
             self._destroy_fip_namespace(ns)
         elif ns.startswith(dvr.SNAT_NS_PREFIX):
             self._destroy_snat_namespace(ns)
@@ -294,7 +295,7 @@ class L3NATAgent(firewall_l3_agent.FWaaSL3AgentRpcCallback,
                 # device is on default bridge
                 self.driver.unplug(d.name, namespace=ns,
                                    prefix=INTERNAL_DEV_PREFIX)
-            elif d.name.startswith(dvr.ROUTER_2_FIP_DEV_PREFIX):
+            elif d.name.startswith(dvr_fip_ns.ROUTER_2_FIP_DEV_PREFIX):
                 ns_ip.del_veth(d.name)
             elif d.name.startswith(EXTERNAL_DEV_PREFIX):
                 self.driver.unplug(d.name,
@@ -532,10 +533,10 @@ class L3NATAgent(firewall_l3_agent.FWaaSL3AgentRpcCallback,
             raise n_exc.FloatingIpSetupException('L3 agent failure to setup '
                 'NAT for floating IPs')
 
-    def _configure_fip_addresses(self, ri, ex_gw_port):
+    def _configure_fip_addresses(self, ri, interface_name):
         try:
             return self.process_router_floating_ip_addresses(
-                ri, ex_gw_port)
+                ri, interface_name)
         except Exception:
             # TODO(salv-orlando): Less broad catching
             raise n_exc.FloatingIpSetupException('L3 agent failure to setup '
@@ -575,7 +576,9 @@ class L3NATAgent(firewall_l3_agent.FWaaSL3AgentRpcCallback,
 
             # Once NAT rules for floating IPs are safely in place
             # configure their addresses on the external gateway port
-            fip_statuses = self._configure_fip_addresses(ri, ex_gw_port)
+            interface_name = self._get_external_device_interface_name(
+                ri, ex_gw_port)
+            fip_statuses = self._configure_fip_addresses(ri, interface_name)
 
         except (n_exc.FloatingIpSetupException, n_exc.IpTablesApplyException):
                 # All floating IPs must be put in error state
@@ -588,7 +591,10 @@ class L3NATAgent(firewall_l3_agent.FWaaSL3AgentRpcCallback,
         # TODO(mrsmith) - we shouldn't need to check here
         if 'distributed' not in ri.router:
             ri.router['distributed'] = False
-        self.scan_fip_ports(ri)
+        ex_gw_port = self._get_ex_gw_port(ri)
+        if ri.router.get('distributed') and ex_gw_port:
+            ri.fip_ns = self.get_fip_ns(ex_gw_port['network_id'])
+            ri.fip_ns.scan_fip_ports(ri)
         self._process_internal_ports(ri)
         self._process_external(ri)
         # Process static routes for router
@@ -598,7 +604,7 @@ class L3NATAgent(firewall_l3_agent.FWaaSL3AgentRpcCallback,
         self._process_ha_router(ri)
 
         # Update ex_gw_port and enable_snat on the router info cache
-        ri.ex_gw_port = self._get_ex_gw_port(ri)
+        ri.ex_gw_port = ex_gw_port
         ri.snat_ports = ri.router.get(l3_constants.SNAT_ROUTER_INTF_KEY, [])
         ri.enable_snat = ri.router.get('enable_snat')
 
@@ -660,25 +666,32 @@ class L3NATAgent(firewall_l3_agent.FWaaSL3AgentRpcCallback,
     def create_dvr_fip_interfaces(self, ri, ex_gw_port):
         floating_ips = self.get_floating_ips(ri)
         if floating_ips:
-            is_first = self._fip_ns_subscribe(ri.router_id)
+            is_first = ri.fip_ns.subscribe(ri.router_id)
             if is_first:
-                self._create_agent_gateway_port(ri, floating_ips[0]
-                                                ['floating_network_id'])
+                agent_gateway_port = (
+                    self.plugin_rpc.get_agent_gateway_port(
+                        self.context, ex_gw_port['network_id']))
+                if 'subnet' not in agent_gateway_port:
+                    LOG.error(_LE('Missing subnet/agent_gateway_port'))
+                else:
+                    self._set_subnet_info(agent_gateway_port)
+                    ri.fip_ns.create_gateway_port(agent_gateway_port)
 
-        if self.agent_gateway_port and floating_ips:
-            fip_net_id = floating_ips[0]['floating_network_id']
-            self.create_rtr_2_fip_link(ri, fip_net_id)
+        if ri.fip_ns.agent_gateway_port and floating_ips:
+            if ri.dist_fip_count == 0:
+                ri.fip_ns.create_rtr_2_fip_link(ri)
+
+                # kicks the FW Agent to add rules for the IR namespace if
+                # configured
+                self.process_router_add(ri)
 
     def _get_external_device_interface_name(self, ri, ex_gw_port):
         if ri.router['distributed']:
-            fip_int = self.get_fip_int_device_name(ri.router_id)
-            # TODO(mrsmith) refactor for multiple ext nets
-            fip_ns = self.get_fip_ns_name(str(self._fetch_external_net_id()))
-
+            fip_int = ri.fip_ns.get_int_device_name(ri.router_id)
             if ip_lib.device_exists(fip_int,
                                     root_helper=self.root_helper,
-                                    namespace=fip_ns):
-                return self.get_rtr_int_device_name(ri.router_id)
+                                    namespace=ri.fip_ns.get_name()):
+                return ri.fip_ns.get_rtr_ext_device_name(ri.router_id)
         else:
             return self.get_external_device_name(ex_gw_port['id'])
 
@@ -730,7 +743,7 @@ class L3NATAgent(firewall_l3_agent.FWaaSL3AgentRpcCallback,
         else:
             return set([addr['cidr'] for addr in device.addr.list()])
 
-    def process_router_floating_ip_addresses(self, ri, ex_gw_port):
+    def process_router_floating_ip_addresses(self, ri, interface_name):
         """Configure IP addresses on router's external gateway interface.
 
         Ensures addresses for existing floating IPs and cleans up
@@ -738,8 +751,6 @@ class L3NATAgent(firewall_l3_agent.FWaaSL3AgentRpcCallback,
         """
 
         fip_statuses = {}
-        interface_name = self._get_external_device_interface_name(
-            ri, ex_gw_port)
         if interface_name is None:
             return fip_statuses
 
@@ -877,7 +888,9 @@ class L3NATAgent(firewall_l3_agent.FWaaSL3AgentRpcCallback,
     def external_gateway_removed(self, ri, ex_gw_port, interface_name):
         if ri.router['distributed']:
             self.process_router_floating_ip_nat_rules(ri)
-            self.process_router_floating_ip_addresses(ri, ex_gw_port)
+            interface_name = self._get_external_device_interface_name(
+                ri, ex_gw_port)
+            self.process_router_floating_ip_addresses(ri, interface_name)
             for p in ri.internal_ports:
                 internal_interface = self.get_internal_device_name(p['id'])
                 self._snat_redirect_remove(ri, p, internal_interface)

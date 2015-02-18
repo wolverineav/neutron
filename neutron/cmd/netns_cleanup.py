@@ -14,9 +14,7 @@
 #    under the License.
 
 import re
-
-import eventlet
-eventlet.monkey_patch()
+import time
 
 from oslo_config import cfg
 from oslo_utils import importutils
@@ -73,10 +71,9 @@ def setup_conf():
     return conf
 
 
-def _get_dhcp_process_monitor(config, root_helper):
+def _get_dhcp_process_monitor(config):
     return external_process.ProcessMonitor(
         config=config,
-        root_helper=root_helper,
         resource_type='dhcp')
 
 
@@ -88,7 +85,7 @@ def kill_dhcp(conf, namespace):
     dhcp_driver = importutils.import_object(
         conf.dhcp_driver,
         conf=conf,
-        process_monitor=_get_dhcp_process_monitor(conf, root_helper),
+        process_monitor=_get_dhcp_process_monitor(conf),
         network=dhcp.NetModel(conf.use_namespaces, {'id': network_id}),
         root_helper=root_helper,
         plugin=FakeDhcpPlugin())
@@ -179,7 +176,7 @@ def main():
                   if eligible_for_deletion(conf, ns, conf.force)]
 
     if candidates:
-        eventlet.sleep(2)
+        time.sleep(2)
 
         for namespace in candidates:
             destroy_namespace(conf, namespace, conf.force)

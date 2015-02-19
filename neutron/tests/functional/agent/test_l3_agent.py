@@ -314,12 +314,11 @@ class L3AgentTestCase(L3AgentTestFramework):
         self._add_fip(router, client_address, fixed_address=server_address)
         self.agent.process_router(router)
 
-        router_ns = ip_lib.IPWrapper(self.root_helper,
-                                     namespace=router.ns_name)
+        router_ns = ip_lib.IPWrapper(namespace=router.ns_name)
         netcat = helpers.NetcatTester(router_ns, router_ns,
                                       server_address, port,
                                       client_address=client_address,
-                                      root_helper=self.root_helper,
+                                      run_as_root=True,
                                       udp=False)
         self.addCleanup(netcat.stop_processes)
 
@@ -408,7 +407,7 @@ class L3AgentTestCase(L3AgentTestFramework):
         self._assert_internal_devices(router)
         self._assert_external_device(router)
         self._assert_gateway(router)
-        self._assert_floating_ips(router)
+        self.assertTrue(self._floating_ips_configured(router))
         self._assert_snat_chains(router)
         self._assert_floating_ip_chains(router)
         self._assert_metadata_chains(router)
@@ -443,16 +442,14 @@ class L3AgentTestCase(L3AgentTestFramework):
         expected_gateway = external_port['subnet']['gateway_ip']
         self.assertEqual(expected_gateway, existing_gateway)
 
-    def _assert_floating_ips(self, router):
+    def _floating_ips_configured(self, router):
         floating_ips = router.router[l3_constants.FLOATINGIP_KEY]
-        self.assertTrue(len(floating_ips))
         external_port = self.agent._get_ex_gw_port(router)
-        for fip in floating_ips:
-            self.assertTrue(ip_lib.device_exists_with_ip_mac(
-                self.agent.get_external_device_name(external_port['id']),
-                '%s/32' % fip['floating_ip_address'],
-                external_port['mac_address'],
-                router.ns_name, self.root_helper))
+        return len(floating_ips) and all(ip_lib.device_exists_with_ip_mac(
+            self.agent.get_external_device_name(external_port['id']),
+            '%s/32' % fip['floating_ip_address'],
+            external_port['mac_address'],
+            router.ns_name, self.root_helper) for fip in floating_ips)
 
     def _assert_ha_device(self, router):
         self.assertTrue(self.device_exists_with_ip_mac(
@@ -462,6 +459,15 @@ class L3AgentTestCase(L3AgentTestFramework):
     def _assert_no_ip_addresses_on_interface(self, router, interface):
         device = ip_lib.IPDevice(interface, self.root_helper, router.ns_name)
         self.assertEqual([], device.addr.list())
+
+    def test_ha_router_conf_on_restarted_agent(self):
+        router_info = self.generate_router_info(enable_ha=True)
+        router1 = self._create_router(self.agent, router_info)
+        self._add_fip(router1, '192.168.111.12')
+        restarted_agent = l3_test_agent.TestL3NATAgent(self.agent.host,
+                                                       self.agent.conf)
+        self._create_router(restarted_agent, router1.router)
+        helpers.wait_until_true(lambda: self._floating_ips_configured(router1))
 
 
 class L3HATestFramework(L3AgentTestFramework):
@@ -638,11 +644,41 @@ class TestDvrRouter(L3AgentTestFramework):
         floating_ip['port_id'] = internal_ports[0]['id']
         floating_ip['status'] = 'ACTIVE'
 
-        if not enable_snat:
-            return router
-
         self._add_snat_port_info_to_router(router, internal_ports)
+        # FIP has a dependency on external gateway. So we need to create
+        # the snat_port info and fip_agent_gw_port_info irrespective of
+        # the agent type the dvr supports. The namespace creation is
+        # dependent on the agent_type.
+        external_gw_port = router['gw_port']
+        self._add_fip_agent_gw_port_info_to_router(router, external_gw_port)
         return router
+
+    def _add_fip_agent_gw_port_info_to_router(self, router, external_gw_port):
+        # Add fip agent gateway port information to the router_info
+        fip_gw_port_list = router.get(
+            l3_constants.FLOATINGIP_AGENT_INTF_KEY, [])
+        if not fip_gw_port_list and external_gw_port:
+            # Get values from external gateway port
+            fixed_ip = external_gw_port['fixed_ips'][0]
+            float_subnet = external_gw_port['subnet']
+            port_ip = fixed_ip['ip_address']
+            # Pick an ip address which is not the same as port_ip
+            fip_gw_port_ip = str(netaddr.IPAddress(port_ip) + 5)
+            # Add floatingip agent gateway port info to router
+            router[l3_constants.FLOATINGIP_AGENT_INTF_KEY] = [
+                {'subnet':
+                    {'cidr': float_subnet['cidr'],
+                        'gateway_ip': float_subnet['gateway_ip'],
+                        'id': fixed_ip['subnet_id']},
+                    'network_id': external_gw_port['network_id'],
+                    'device_owner': 'network:floatingip_agent_gateway',
+                    'mac_address': 'fa:16:3e:80:8d:89',
+                    'binding:host_id': self.agent.conf.host,
+                    'fixed_ips': [{'subnet_id': fixed_ip['subnet_id'],
+                                    'ip_address': fip_gw_port_ip}],
+                    'id': _uuid(),
+                    'device_id': _uuid()}
+            ]
 
     def _add_snat_port_info_to_router(self, router, internal_ports):
         # Add snat port information to the router
@@ -731,14 +767,19 @@ class TestDvrRouter(L3AgentTestFramework):
         # is created with the ip address of the external gateway port
         floating_ips = router.router[l3_constants.FLOATINGIP_KEY]
         self.assertTrue(floating_ips)
+        # We need to fetch the floatingip agent gateway port info
+        # from the router_info
+        floating_agent_gw_port = (
+            router.router[l3_constants.FLOATINGIP_AGENT_INTF_KEY])
+        self.assertTrue(floating_agent_gw_port)
 
-        external_port = self.agent._get_ex_gw_port(router)
+        external_gw_port = floating_agent_gw_port[0]
         fip_ns = self.agent.get_fip_ns(floating_ips[0]['floating_network_id'])
         fip_ns_name = fip_ns.get_name()
         fg_port_created_succesfully = ip_lib.device_exists_with_ip_mac(
-            fip_ns.get_ext_device_name(external_port['id']),
-            external_port['ip_cidr'],
-            external_port['mac_address'],
+            fip_ns.get_ext_device_name(external_gw_port['id']),
+            external_gw_port['ip_cidr'],
+            external_gw_port['mac_address'],
             fip_ns_name, self.root_helper)
         self.assertTrue(fg_port_created_succesfully)
         # Check fpr-router device has been created

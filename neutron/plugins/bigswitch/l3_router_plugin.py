@@ -96,8 +96,7 @@ class L3RestProxy(cplugin.NeutronRestProxyV2Base,
                                self).update_router(context, router_id, router)
             if new_router.get(l3.EXTERNAL_GW_INFO):
                 ext_net_id = new_router[l3.EXTERNAL_GW_INFO].get('network_id')
-                ext_net = super(L3RestProxy,
-                                self).get_network(context, ext_net_id)
+                ext_net = self.get_network(context, ext_net_id)
                 ext_tenant_id = ext_net.get('tenant_id')
                 if ext_tenant_id:
                     new_router[l3.EXTERNAL_GW_INFO]['tenant_id'] = (

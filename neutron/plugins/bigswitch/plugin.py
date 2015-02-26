@@ -181,6 +181,14 @@ class NeutronRestProxyV2Base(db_base_plugin_v2.NeutronDbPluginV2,
                 net_ports = plugin.get_ports(admin_context,
                                              filters=net_filter) or []
                 for port in net_ports:
+                    # skip L3 router ports since the backend
+                    # implements the router
+                    if (self.l3_plugin and
+                        port.get('device_owner') in
+                        [const.DEVICE_OWNER_ROUTER_INTF,
+                         const.DEVICE_OWNER_ROUTER_GW,
+                         const.DEVICE_OWNER_ROUTER_HA_INTF]):
+                        continue
                     mapped_port = self._map_state_and_status(port)
                     mapped_port['attachment'] = {
                         'id': port.get('device_id'),

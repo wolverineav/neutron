@@ -74,6 +74,7 @@ from neutron.db import securitygroups_rpc_base as sg_db_rpc
 from neutron.extensions import allowedaddresspairs as addr_pair
 from neutron.extensions import external_net
 from neutron.extensions import extra_dhcp_opt as edo_ext
+from neutron.extensions import l3
 from neutron.extensions import portbindings
 from neutron import manager
 from neutron.openstack.common import importutils
@@ -199,6 +200,15 @@ class NeutronRestProxyV2Base(db_base_plugin_v2.NeutronDbPluginV2,
             routers = []
             all_routers = self.l3_plugin.get_routers(admin_context) or []
             for router in all_routers:
+                # Add tenant_id of the external gateway network
+                if router.get(l3.EXTERNAL_GW_INFO):
+                    ext_net_id = router[l3.EXTERNAL_GW_INFO].get('network_id')
+                    ext_net = self.get_network(admin_context, ext_net_id)
+                    ext_tenant_id = ext_net.get('tenant_id')
+                    if ext_tenant_id:
+                        router[l3.EXTERNAL_GW_INFO]['tenant_id'] = (
+                            ext_tenant_id)
+
                 interfaces = []
                 mapped_router = self._map_state_and_status(router)
                 router_filter = {

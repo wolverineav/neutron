@@ -61,8 +61,8 @@ class BigSwitchMechanismDriver(plugin.NeutronRestProxyV2Base,
         self.servers = servermanager.ServerPool()
         self.servers.get_topo_function = self._get_all_data
         self.servers.get_topo_function_args = {'get_ports': True,
-                                               'get_floating_ips': False,
-                                               'get_routers': False}
+                                               'get_floating_ips': True,
+                                               'get_routers': True}
         self.segmentation_types = ', '.join(cfg.CONF.ml2.type_drivers)
         # Track hosts running IVS to avoid excessive calls to the backend
         self.ivs_host_cache = {}

@@ -188,7 +188,7 @@ class NeutronRestProxyV2Base(db_base_plugin_v2.NeutronDbPluginV2,
                 for port in net_ports:
                     # skip L3 router ports since the backend
                     # implements the router
-                    if (self.l3_plugin and
+                    if (self.l3_bsn_plugin and
                         port.get('device_owner') in
                         [const.DEVICE_OWNER_ROUTER_INTF,
                          const.DEVICE_OWNER_ROUTER_GW,

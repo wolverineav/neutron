@@ -94,6 +94,14 @@ class L3RestProxy(cplugin.NeutronRestProxyV2Base,
         with context.session.begin(subtransactions=True):
             new_router = super(L3RestProxy,
                                self).update_router(context, router_id, router)
+            if new_router.get(l3.EXTERNAL_GW_INFO):
+                ext_net_id = new_router[l3.EXTERNAL_GW_INFO].get('network_id')
+                ext_net = super(L3RestProxy,
+                                self).get_network(context, ext_net_id)
+                ext_tenant_id = ext_net.get('tenant_id')
+                if ext_tenant_id:
+                    new_router[l3.EXTERNAL_GW_INFO]['tenant_id'] = (
+                        ext_tenant_id)
             router = self._map_state_and_status(new_router)
 
             # update router on network controller

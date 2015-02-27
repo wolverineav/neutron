@@ -48,6 +48,8 @@ class L3RestProxy(cplugin.NeutronRestProxyV2Base,
                   routerrule_db.RouterRule_db_mixin):
 
     supported_extension_aliases = ["router", "router_rules"]
+    # This is a flag to tell that L3 plugin is BSN.
+    bsn = True
 
     @staticmethod
     def get_plugin_type():

@@ -82,7 +82,6 @@ from neutron.openstack.common import log as logging
 from neutron.plugins.bigswitch import config as pl_config
 from neutron.plugins.bigswitch.db import porttracker_db
 from neutron.plugins.bigswitch import extensions
-from neutron.plugins.bigswitch.l3_router_plugin import L3RestProxy
 from neutron.plugins.bigswitch import servermanager
 from neutron.plugins.bigswitch import version
 from neutron.plugins.common import constants as pconst
@@ -163,7 +162,12 @@ class NeutronRestProxyV2Base(db_base_plugin_v2.NeutronDbPluginV2,
 
     @property
     def l3_bsn_plugin(self):
-        return isinstance(self.l3_plugin, L3RestProxy)
+        return hasattr(self.l3_plugin, "bsn")
+
+    def _get_all_data_auto(self):
+        return self._get_all_data(
+                get_floating_ips=self.l3_bsn_plugin,
+                get_routers=self.l3_bsn_plugin)
 
     def _get_all_data(self, get_ports=True, get_floating_ips=True,
                       get_routers=True):

@@ -257,11 +257,15 @@ class Server(object):
 
     def _run(self, application, socket):
         """Start a WSGI server in a new green thread."""
-        eventlet.wsgi.server(socket, application, custom_pool=self.pool,
-                             log=logging.WritableLogger(LOG),
-                             keepalive=CONF.wsgi_keep_alive,
-                             socket_timeout=self.client_socket_timeout)
-
+        try:
+            eventlet.wsgi.server(socket, application, custom_pool=self.pool,
+                                 log=logging.WritableLogger(LOG),
+                                 keepalive=CONF.wsgi_keep_alive,
+                                 socket_timeout=self.client_socket_timeout)
+        except:
+            eventlet.wsgi.server(socket, application, custom_pool=self.pool,
+                                 log=logging.WritableLogger(LOG),
+                                 keepalive=CONF.wsgi_keep_alive)
 
 class Middleware(object):
     """Base WSGI middleware wrapper.

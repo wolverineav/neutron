@@ -292,7 +292,6 @@ class OVSNeutronAgent(sg_rpc.SecurityGroupAgentRpcCallbackMixin,
         self.endpoints = [self]
         # Define the listening consumers for the agent
         consumers = [[topics.PORT, topics.UPDATE],
-                     [topics.PORT, topics.DELETE],
                      [topics.NETWORK, topics.DELETE],
                      [constants.TUNNEL, topics.UPDATE],
                      [constants.TUNNEL, topics.DELETE],
@@ -330,13 +329,6 @@ class OVSNeutronAgent(sg_rpc.SecurityGroupAgentRpcCallbackMixin,
         # are processed in the same order as the relevant API requests
         self.updated_ports.add(port['id'])
         LOG.debug("port_update message processed for port %s", port['id'])
-
-    def port_delete(self, context, **kwargs):
-        port_id = kwargs.get('port_id')
-        port = self.int_br.get_vif_port_by_id(port_id)
-        # If port exists, delete it
-        if port:
-            self.int_br.delete_port(port.port_name)
 
     def tunnel_update(self, context, **kwargs):
         LOG.debug("tunnel_update received")
@@ -433,6 +425,9 @@ class OVSNeutronAgent(sg_rpc.SecurityGroupAgentRpcCallbackMixin,
 
     def del_fdb_flow(self, br, port_info, remote_ip, lvm, ofport):
         if port_info == q_const.FLOODING_ENTRY:
+            if ofport not in lvm.tun_ofports:
+                LOG.debug("attempt to remove a non-existent port %s", ofport)
+                return
             lvm.tun_ofports.remove(ofport)
             if len(lvm.tun_ofports) > 0:
                 ofports = _ofport_set_to_str(lvm.tun_ofports)

@@ -401,9 +401,9 @@ The following chart captures the following aspects:
 +-------------------------------+-----------------------+-----------+------------------+---------+--------------+
 | networking-hyperv_            |                       |           |                  |         |              |
 +-------------------------------+-----------------------+-----------+------------------+---------+--------------+
-| networking-metaplugin_        |                       |           |                  |         |              |
+| networking-metaplugin_        |         core          |    no     |       no         |   [C]   |     Kilo     |
 +-------------------------------+-----------------------+-----------+------------------+---------+--------------+
-| networking-midonet_           |                       |           |                  |         |              |
+| networking-midonet_           |        core,lb        |    yes    |       yes        |   [C]   |     Kilo     |
 +-------------------------------+-----------------------+-----------+------------------+---------+--------------+
 | networking-mlnx_              |                       |           |                  |         |              |
 +-------------------------------+-----------------------+-----------+------------------+---------+--------------+
@@ -440,7 +440,19 @@ Arista
 
 .. _networking-metaplugin:
 
+Metaplugin
+----------
+
+* Git: https://github.com/ntt-sic/networking-metaplugin
+
 .. _networking-midonet:
+
+MidoNet
+-------
+
+*  Git: https://github.com/stackforge/networking-midonet
+*  Launchpad: https://launchpad.net/networking-midonet
+*  Pypi: https://pypi.python.org/pypi/networking-midonet
 
 .. _networking-mlnx:
 

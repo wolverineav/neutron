@@ -397,7 +397,7 @@ The following chart captures the following aspects:
 +-------------------------------+-----------------------+-----------+------------------+---------+--------------+
 | networking-brocade_           |                       |           |                  |         |              |
 +-------------------------------+-----------------------+-----------+------------------+---------+--------------+
-| networking-cisco_             |                       |           |                  |         |              |
+| networking-cisco_             |  core,ml2,l3,fw,vpn   |    yes    |       yes        |   [B]   |              |
 +-------------------------------+-----------------------+-----------+------------------+---------+--------------+
 | networking-hyperv_            |                       |           |                  |         |              |
 +-------------------------------+-----------------------+-----------+------------------+---------+--------------+
@@ -411,7 +411,7 @@ The following chart captures the following aspects:
 +-------------------------------+-----------------------+-----------+------------------+---------+--------------+
 | networking-odl_               |      ml2,l3,lb,fw     |    yes    |       no         |   [C]   |     Kilo     |
 +-------------------------------+-----------------------+-----------+------------------+---------+--------------+
-| networking-ofagent_           |                       |           |                  |         |              |
+| networking-ofagent_           |          ml2          |    yes    |       no         |   [C]   |     Kilo     |
 +-------------------------------+-----------------------+-----------+------------------+---------+--------------+
 | networking-ovs-dpdk_          |                       |           |                  |         |              |
 +-------------------------------+-----------------------+-----------+------------------+---------+--------------+
@@ -435,6 +435,13 @@ Arista
 .. _networking-brocade:
 
 .. _networking-cisco:
+
+Cisco
+-----
+
+* Git: https://git.openstack.org/stackforge/networking-cisco
+* Launchpad: https://launchpad.net/networking-cisco
+* PyPI: https://pypi.python.org/pypi/networking-cisco
 
 .. _networking-hyperv:
 
@@ -467,6 +474,12 @@ OpenDayLight
 * Launchpad: https://launchpad.net/networking-odl
 
 .. _networking-ofagent:
+
+OpenFlow Agent (ofagent)
+------------------------
+
+* Git: https://github.com/stackforge/networking-ofagent
+* Launchpad: https://launchpad.net/networking-ofagent
 
 .. _networking-ovs-dpdk:
 

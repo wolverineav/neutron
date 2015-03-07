@@ -413,7 +413,7 @@ The following chart captures the following aspects:
 +-------------------------------+-----------------------+-----------+------------------+---------+--------------+
 | networking-ofagent_           |          ml2          |    yes    |       no         |   [C]   |     Kilo     |
 +-------------------------------+-----------------------+-----------+------------------+---------+--------------+
-| networking-ovs-dpdk_          |                       |           |                  |         |              |
+| networking-ovs-dpdk_          |          ml2          |    yes    |       no         |   [C]   |     Kilo     |
 +-------------------------------+-----------------------+-----------+------------------+---------+--------------+
 | networking-plumgrid_          |          core         |    yes    |       yes        |   [C]   |     Kilo     |
 +-------------------------------+-----------------------+-----------+------------------+---------+--------------+
@@ -421,7 +421,7 @@ The following chart captures the following aspects:
 +-------------------------------+-----------------------+-----------+------------------+---------+--------------+
 | pluribus_                     |                       |           |                  |         |              |
 +-------------------------------+-----------------------+-----------+------------------+---------+--------------+
-| vmware-nsx_                   |    core,fw,lb,vpn     |    yes    |       yes        |   [B]   |              |
+| vmware-nsx_                   |         core          |    yes    |       yes        |   [C]   |     Kilo     |
 +-------------------------------+-----------------------+-----------+------------------+---------+--------------+
 
 .. _networking-arista:
@@ -482,6 +482,12 @@ OpenFlow Agent (ofagent)
 * Launchpad: https://launchpad.net/networking-ofagent
 
 .. _networking-ovs-dpdk:
+
+Networking OVS-DPDK
+-------------------
+
+* Git: https://github.com/stackforge/networking-ovs-dpdk
+* Launchpad: https://launchpad.net/networking-ovs-dpdk
 
 .. _networking-plumgrid:
 

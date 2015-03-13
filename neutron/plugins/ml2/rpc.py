@@ -13,6 +13,7 @@
 #    License for the specific language governing permissions and limitations
 #    under the License.
 
+from oslo_log import log
 import oslo_messaging
 from sqlalchemy.orm import exc
 
@@ -26,7 +27,6 @@ from neutron.common import utils
 from neutron.extensions import portbindings
 from neutron.i18n import _LW
 from neutron import manager
-from neutron.openstack.common import log
 from neutron.plugins.common import constants as service_constants
 from neutron.plugins.ml2 import driver_api as api
 from neutron.plugins.ml2.drivers import type_tunnel
@@ -199,6 +199,10 @@ class AgentNotifierApi(dvr_rpc.DVRAgentRpcApiMixin,
         self.topic_port_update = topics.get_topic_name(topic,
                                                        topics.PORT,
                                                        topics.UPDATE)
+        self.topic_port_delete = topics.get_topic_name(topic,
+                                                       topics.PORT,
+                                                       topics.DELETE)
+
         target = oslo_messaging.Target(topic=topic, version='1.0')
         self.client = n_rpc.get_client(target)
 
@@ -214,3 +218,8 @@ class AgentNotifierApi(dvr_rpc.DVRAgentRpcApiMixin,
         cctxt.cast(context, 'port_update', port=port,
                    network_type=network_type, segmentation_id=segmentation_id,
                    physical_network=physical_network)
+
+    def port_delete(self, context, port_id):
+        cctxt = self.client.prepare(topic=self.topic_port_delete,
+                                    fanout=True)
+        cctxt.cast(context, 'port_delete', port_id=port_id)

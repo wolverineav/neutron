@@ -13,8 +13,10 @@
 #    under the License.
 
 import binascii
-import netaddr
 import weakref
+
+import netaddr
+from oslo_log import log as logging
 
 from neutron.agent.l3 import dvr_fip_ns
 from neutron.agent.l3 import dvr_snat_ns
@@ -22,7 +24,6 @@ from neutron.agent.linux import ip_lib
 from neutron.agent.linux import iptables_manager
 from neutron.common import constants as l3_constants
 from neutron.i18n import _LE
-from neutron.openstack.common import log as logging
 
 LOG = logging.getLogger(__name__)
 
@@ -67,10 +68,6 @@ class AgentMixin(object):
     def get_snat_int_device_name(self, port_id):
         return (SNAT_INT_DEV_PREFIX +
                 port_id)[:self.driver.DEV_NAME_LEN]
-
-    # TODO(Carl) Remove this method when vpnaas no longer needs it.
-    def get_snat_ns_name(self, router_id):
-        return (SNAT_NS_PREFIX + router_id)
 
     def get_snat_interfaces(self, ri):
         return ri.router.get(l3_constants.SNAT_ROUTER_INTF_KEY, [])

@@ -400,6 +400,8 @@ The following chart captures the following aspects:
 +-------------------------------+-----------------------+-----------+------------------+---------+--------------+
 | networking-arista_            |       ml2,l3          |    yes    |       yes        |   [C]   |     Kilo     |
 +-------------------------------+-----------------------+-----------+------------------+---------+--------------+
+| networking-bigswitch_         |      ml2,core,l3      |    no     |       yes        |   [C]   |     Kilo     |
++-------------------------------+-----------------------+-----------+------------------+---------+--------------+
 | networking-brocade_           |                       |           |                  |         |              |
 +-------------------------------+-----------------------+-----------+------------------+---------+--------------+
 | networking-cisco_             |  core,ml2,l3,fw,vpn   |    yes    |       yes        |   [B]   |              |
@@ -418,7 +420,7 @@ The following chart captures the following aspects:
 +-------------------------------+-----------------------+-----------+------------------+---------+--------------+
 | networking-odl_               |      ml2,l3,lb,fw     |    yes    |       no         |   [C]   |     Kilo     |
 +-------------------------------+-----------------------+-----------+------------------+---------+--------------+
-| networking-ofagent_           |          ml2          |    yes    |       no         |   [C]   |     Kilo     |
+| networking-ofagent_           |          ml2          |    yes    |       yes        |   [C]   |     Kilo     |
 +-------------------------------+-----------------------+-----------+------------------+---------+--------------+
 | networking-ovs-dpdk_          |          ml2          |    yes    |       no         |   [C]   |     Kilo     |
 +-------------------------------+-----------------------+-----------+------------------+---------+--------------+
@@ -439,6 +441,14 @@ Arista
 * Git: https://github.com/stackforge/networking-arista
 * Launchpad: https://launchpad.net/networking-arista
 * Pypi: https://pypi.python.org/pypi/networking-arista
+
+.. _networking-bigswitch:
+
+Big Switch Networks
+-------------------
+
+* Git: https://git.openstack.org/stackforge/networking-bigswitch
+* Pypi: https://pypi.python.org/pypi/bsnstacklib
 
 .. _networking-brocade:
 
@@ -502,6 +512,7 @@ OpenFlow Agent (ofagent)
 
 * Git: https://github.com/stackforge/networking-ofagent
 * Launchpad: https://launchpad.net/networking-ofagent
+* PyPI: https://pypi.python.org/pypi/networking-ofagent
 
 .. _networking-ovs-dpdk:
 

@@ -19,6 +19,7 @@ import time
 import mock
 import netaddr
 from oslo_config import cfg
+from oslo_log import log
 import testtools
 
 from neutron.agent.linux import async_process
@@ -26,7 +27,6 @@ from neutron.agent.linux import ip_lib
 from neutron.agent.linux import ovs_lib
 from neutron.agent.linux import utils
 from neutron.common import constants as n_const
-from neutron.openstack.common import log
 from neutron.plugins.common import constants as p_const
 from neutron.plugins.ml2.drivers.l2pop import rpc as l2pop_rpc
 from neutron.plugins.openvswitch.agent import ovs_neutron_agent
@@ -497,6 +497,20 @@ class TestOvsNeutronAgent(base.BaseTestCase):
                                segmentation_id="1",
                                physical_network="physnet")
         self.assertEqual(set(['123']), self.agent.updated_ports)
+
+    def test_port_delete(self):
+        port_id = "123"
+        port_name = "foo"
+        with contextlib.nested(
+            mock.patch.object(self.agent.int_br, 'get_vif_port_by_id',
+                              return_value=mock.MagicMock(
+                                      port_name=port_name)),
+            mock.patch.object(self.agent.int_br, "delete_port")
+        ) as (get_vif_func, del_port_func):
+            self.agent.port_delete("unused_context",
+                                   port_id=port_id)
+            self.assertTrue(get_vif_func.called)
+            del_port_func.assert_called_once_with(port_name)
 
     def test_setup_physical_bridges(self):
         with contextlib.nested(
@@ -1004,7 +1018,7 @@ class TestOvsNeutronAgent(base.BaseTestCase):
 
         with contextlib.nested(
             mock.patch.object(async_process.AsyncProcess, "_spawn"),
-            mock.patch.object(log.ContextAdapter, 'exception'),
+            mock.patch.object(log.KeywordArgumentAdapter, 'exception'),
             mock.patch.object(ovs_neutron_agent.OVSNeutronAgent,
                               'scan_ports'),
             mock.patch.object(ovs_neutron_agent.OVSNeutronAgent,

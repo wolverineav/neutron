@@ -153,6 +153,7 @@ class NeutronDbPluginV2TestCase(testlib_api.WebTestCase,
                     getattr(manager.NeutronManager.get_plugin(),
                             native_sorting_attr_name, False))
 
+        self.plugin = manager.NeutronManager.get_plugin()
         self._skip_native_sorting = not _is_native_sorting_support()
         if ext_mgr:
             self.ext_api = test_extensions.setup_extensions_middleware(ext_mgr)
@@ -2025,6 +2026,12 @@ class TestNetworksV2(NeutronDbPluginV2TestCase):
                 pass
         self.assertEqual(ctx_manager.exception.code,
                          webob.exc.HTTPForbidden.code)
+
+    def test_create_network_default_mtu(self):
+        name = 'net1'
+        with self.network(name=name) as net:
+            self.assertEqual(net['network']['mtu'],
+                             constants.DEFAULT_NETWORK_MTU)
 
     def test_update_network(self):
         with self.network() as network:

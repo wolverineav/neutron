@@ -1,5 +1,4 @@
-# Copyright (c) 2013 OpenStack Foundation
-# All Rights Reserved.
+# Copyright (c) 2015 Red Hat Inc.
 #
 #    Licensed under the Apache License, Version 2.0 (the "License"); you may
 #    not use this file except in compliance with the License. You may obtain
@@ -13,16 +12,8 @@
 #    License for the specific language governing permissions and limitations
 #    under the License.
 
-"""Exceptions used by ML2."""
-
-from neutron.common import exceptions
+from neutron.agent.l3 import keepalived_state_change
 
 
-class MechanismDriverError(exceptions.NeutronException):
-    """Mechanism driver call failed."""
-    message = _("%(method)s failed.")
-
-
-class VlanTransparencyError(exceptions.NeutronException):
-    """Vlan Transparency not supported by all mechanism drivers."""
-    message = _("Backend does not support VLAN Transparency.")
+def main():
+    keepalived_state_change.main()

@@ -1,5 +1,4 @@
-# Copyright (c) 2013 OpenStack Foundation
-# All Rights Reserved.
+# Copyright 2015 OpenStack Foundation
 #
 #    Licensed under the Apache License, Version 2.0 (the "License"); you may
 #    not use this file except in compliance with the License. You may obtain
@@ -12,17 +11,29 @@
 #    WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
 #    License for the specific language governing permissions and limitations
 #    under the License.
+#
 
-"""Exceptions used by ML2."""
+"""weight_scheduler
 
-from neutron.common import exceptions
+Revision ID: 1955efc66455
+Revises: 35a0f3365720
+Create Date: 2015-03-12 22:11:37.607390
+
+"""
+
+# revision identifiers, used by Alembic.
+revision = '1955efc66455'
+down_revision = '35a0f3365720'
+
+from alembic import op
+import sqlalchemy as sa
 
 
-class MechanismDriverError(exceptions.NeutronException):
-    """Mechanism driver call failed."""
-    message = _("%(method)s failed.")
+def upgrade():
+    op.add_column('agents',
+                  sa.Column('load', sa.Integer(),
+                            default=0, nullable=False))
 
 
-class VlanTransparencyError(exceptions.NeutronException):
-    """Vlan Transparency not supported by all mechanism drivers."""
-    message = _("Backend does not support VLAN Transparency.")
+def downgrade():
+    op.drop_column('agents', 'load')

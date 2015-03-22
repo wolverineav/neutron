@@ -183,6 +183,9 @@ class OVSNeutronAgent(sg_rpc.SecurityGroupAgentRpcCallbackMixin,
             'agent_type': q_const.AGENT_TYPE_OVS,
             'start_flag': True}
 
+        # Validate agent configurations
+        self._check_agent_configurations()
+
         # Keep track of int_br's device count for use by _report_state()
         self.int_br_device_count = 0
 
@@ -1270,7 +1273,7 @@ class OVSNeutronAgent(sg_rpc.SecurityGroupAgentRpcCallbackMixin,
             try:
                 skipped_devices = self.treat_devices_added_or_updated(
                     devices_added_updated, ovs_restarted)
-                LOG.debug("process_network_ports - iteration:%(iter_num)d -"
+                LOG.debug("process_network_ports - iteration:%(iter_num)d - "
                           "treat_devices_added_or_updated completed. "
                           "Skipped %(num_skipped)d devices of "
                           "%(num_current)d devices currently available. "
@@ -1293,7 +1296,7 @@ class OVSNeutronAgent(sg_rpc.SecurityGroupAgentRpcCallbackMixin,
         if 'removed' in port_info:
             start = time.time()
             resync_b = self.treat_devices_removed(port_info['removed'])
-            LOG.debug("process_network_ports - iteration:%(iter_num)d -"
+            LOG.debug("process_network_ports - iteration:%(iter_num)d - "
                       "treat_devices_removed completed in %(elapsed).3f",
                       {'iter_num': self.iter_num,
                        'elapsed': time.time() - start})
@@ -1492,7 +1495,7 @@ class OVSNeutronAgent(sg_rpc.SecurityGroupAgentRpcCallbackMixin,
                         # If treat devices fails - must resync with plugin
                         sync = self.process_network_ports(port_info,
                                                           ovs_restarted)
-                        LOG.debug("Agent rpc_loop - iteration:%(iter_num)d -"
+                        LOG.debug("Agent rpc_loop - iteration:%(iter_num)d - "
                                   "ports processed. Elapsed:%(elapsed).3f",
                                   {'iter_num': self.iter_num,
                                    'elapsed': time.time() - start})
@@ -1507,7 +1510,7 @@ class OVSNeutronAgent(sg_rpc.SecurityGroupAgentRpcCallbackMixin,
                     if self.ancillary_brs:
                         port_info = self.update_ancillary_ports(
                             ancillary_ports)
-                        LOG.debug("Agent rpc_loop - iteration:%(iter_num)d -"
+                        LOG.debug("Agent rpc_loop - iteration:%(iter_num)d - "
                                   "ancillary port info retrieved. "
                                   "Elapsed:%(elapsed).3f",
                                   {'iter_num': self.iter_num,
@@ -1516,7 +1519,7 @@ class OVSNeutronAgent(sg_rpc.SecurityGroupAgentRpcCallbackMixin,
                         if port_info:
                             rc = self.process_ancillary_network_ports(
                                 port_info)
-                            LOG.debug("Agent rpc_loop - iteration:"
+                            LOG.debug("Agent rpc_loop - iteration: "
                                       "%(iter_num)d - ancillary ports "
                                       "processed. Elapsed:%(elapsed).3f",
                                       {'iter_num': self.iter_num,
@@ -1554,6 +1557,11 @@ class OVSNeutronAgent(sg_rpc.SecurityGroupAgentRpcCallbackMixin,
         for rpc_api in (self.plugin_rpc, self.sg_plugin_rpc,
                         self.dvr_plugin_rpc, self.state_rpc):
             rpc_api.client.timeout = timeout
+
+    def _check_agent_configurations(self):
+        if self.enable_distributed_routing and not self.l2_pop:
+            raise ValueError(_("DVR cannot be enabled without "
+                               "L2 population."))
 
 
 def _ofport_set_to_str(ofport_set):

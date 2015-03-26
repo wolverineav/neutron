@@ -26,6 +26,7 @@ import webob.dec
 import webob.exc
 
 from neutron.agent.common import config as agent_config
+from neutron.agent.common import ovs_lib
 from neutron.agent.l3 import agent as neutron_l3_agent
 from neutron.agent.l3 import dvr_snat_ns
 from neutron.agent.l3 import namespaces
@@ -33,7 +34,6 @@ from neutron.agent import l3_agent as l3_agent_main
 from neutron.agent.linux import dhcp
 from neutron.agent.linux import external_process
 from neutron.agent.linux import ip_lib
-from neutron.agent.linux import ovs_lib
 from neutron.agent.linux import utils
 from neutron.common import config as common_config
 from neutron.common import constants as l3_constants
@@ -156,14 +156,12 @@ class L3AgentTestFramework(base.BaseOVSLinuxTestCase):
         ha_device_name = router.get_ha_device_name(router.ha_port['id'])
         ha_device_cidr = router.ha_port['ip_cidr']
         external_port = router.get_ex_gw_port()
-        ex_port_ipv6 = router._get_ipv6_lladdr(
-            external_port['mac_address'])
+        ex_port_ipv6 = ip_lib.get_ipv6_lladdr(external_port['mac_address'])
         external_device_name = router.get_external_device_name(
             external_port['id'])
         external_device_cidr = external_port['ip_cidr']
         internal_port = router.router[l3_constants.INTERFACE_KEY][0]
-        int_port_ipv6 = router._get_ipv6_lladdr(
-            internal_port['mac_address'])
+        int_port_ipv6 = ip_lib.get_ipv6_lladdr(internal_port['mac_address'])
         internal_device_name = router.get_internal_device_name(
             internal_port['id'])
         internal_device_cidr = internal_port['ip_cidr']

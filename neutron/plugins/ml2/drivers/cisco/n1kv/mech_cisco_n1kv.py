@@ -1,5 +1,5 @@
-# Copyright 2015 Cloudbase Solutions.
-# All Rights Reserved.
+# Copyright 2015 Cisco Systems, Inc.
+# All rights reserved.
 #
 #    Licensed under the Apache License, Version 2.0 (the "License"); you may
 #    not use this file except in compliance with the License. You may obtain
@@ -13,14 +13,12 @@
 #    License for the specific language governing permissions and limitations
 #    under the License.
 
-# This is a placeholder so that the vendor code that import the ovs_lib
-# module from agent/linux doesn't fail
-# TODO(atuvenie) remove this module after opening the liberty cycle
+"""
+ML2 Mechanism Driver for Cisco Nexus1000V distributed virtual switches.
+"""
 
-from neutron.agent.common import ovs_lib
+from networking_cisco.plugins.ml2.drivers.cisco.n1kv import mech_cisco_n1kv
 
-INVALID_OFPORT = ovs_lib.INVALID_OFPORT
-BaseOVS = ovs_lib.BaseOVS
-OVSBridge = ovs_lib.OVSBridge
-VifPort = ovs_lib.VifPort
-_build_flow_expr_str = ovs_lib._build_flow_expr_str
+
+class N1KVMechanismDriver(mech_cisco_n1kv.N1KVMechanismDriver):
+    pass

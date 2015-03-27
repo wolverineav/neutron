@@ -1,5 +1,4 @@
-# Copyright 2015 Cloudbase Solutions.
-# All Rights Reserved.
+# Copyright 2015 Red Hat, Inc.
 #
 #    Licensed under the Apache License, Version 2.0 (the "License"); you may
 #    not use this file except in compliance with the License. You may obtain
@@ -13,15 +12,20 @@
 #    License for the specific language governing permissions and limitations
 #    under the License.
 
-# This is a placeholder so that the vendor code that import the ovs_lib
-# module from agent/linux doesn't fail
-# TODO(atuvenie) remove this module after opening the liberty cycle
+import os
 
-from neutron.agent.common import ovs_lib
+import neutron
 
-INVALID_OFPORT = ovs_lib.INVALID_OFPORT
-BaseOVS = ovs_lib.BaseOVS
-OVSBridge = ovs_lib.OVSBridge
-DeferredOVSBridge = ovs_lib.DeferredOVSBridge
-VifPort = ovs_lib.VifPort
-_build_flow_expr_str = ovs_lib._build_flow_expr_str
+
+def find_file(filename, path):
+    """Find a file with name 'filename' located in 'path'."""
+    for root, _, files in os.walk(path):
+        if filename in files:
+            return os.path.abspath(os.path.join(root, filename))
+
+
+def find_sample_file(filename):
+    """Find a file with name 'filename' located in the sample directory."""
+    return find_file(
+        filename,
+        path=os.path.join(neutron.__path__[0], '..', 'etc'))

@@ -19,6 +19,7 @@ from oslo_log import log as logging
 from neutron.agent.l3 import namespaces
 from neutron.agent.linux import ip_lib
 from neutron.agent.linux import iptables_manager
+from neutron.agent.linux import ra
 from neutron.common import constants as l3_constants
 from neutron.common import exceptions as n_exc
 from neutron.common import utils as common_utils
@@ -61,6 +62,25 @@ class RouterInfo(object):
         self.driver = interface_driver
         # radvd is a neutron.agent.linux.ra.DaemonMonitor
         self.radvd = None
+
+    def initialize(self, process_monitor):
+        """Initialize the router on the system.
+
+        This differs from __init__ in that this method actually affects the
+        system creating namespaces, starting processes, etc.  The other merely
+        initializes the python object.  This separates in-memory object
+        initialization from methods that actually go do stuff to the system.
+
+        :param process_monitor: The agent's process monitor instance.
+        """
+        self.process_monitor = process_monitor
+        self.radvd = ra.DaemonMonitor(self.router_id,
+                                      self.ns_name,
+                                      process_monitor,
+                                      self.get_internal_device_name)
+
+        if self.router_namespace:
+            self.router_namespace.create()
 
     @property
     def router(self):
@@ -247,11 +267,11 @@ class RouterInfo(object):
             fip_statuses[fip['id']] = l3_constants.FLOATINGIP_STATUS_ERROR
         return fip_statuses
 
-    def create(self):
-        if self.router_namespace:
-            self.router_namespace.create()
-
-    def delete(self):
+    def delete(self, agent):
+        self.router['gw_port'] = None
+        self.router[l3_constants.INTERFACE_KEY] = []
+        self.router[l3_constants.FLOATINGIP_KEY] = []
+        self.process(agent)
         self.radvd.disable()
         if self.router_namespace:
             self.router_namespace.delete()
@@ -375,20 +395,41 @@ class RouterInfo(object):
         # Build up the interface and gateway IP addresses that
         # will be added to the interface.
         ip_cidrs = common_utils.fixed_ip_cidrs(ex_gw_port['fixed_ips'])
-        gateway_ips = [subnet['gateway_ip']
-                       for subnet in ex_gw_port['subnets']
-                       if subnet['gateway_ip']]
+        gateway_ips = []
+        enable_ra_on_gw = False
+        if 'subnets' in ex_gw_port:
+            gateway_ips = [subnet['gateway_ip']
+                           for subnet in ex_gw_port['subnets']
+                           if subnet['gateway_ip']]
+        if self.use_ipv6 and not self.is_v6_gateway_set(gateway_ips):
+            # No IPv6 gateway is available, but IPv6 is enabled.
+            if self.agent_conf.ipv6_gateway:
+                # ipv6_gateway configured, use address for default route.
+                gateway_ips.append(self.agent_conf.ipv6_gateway)
+            else:
+                # ipv6_gateway is also not configured.
+                # Use RA for default route.
+                enable_ra_on_gw = True
         self.driver.init_l3(interface_name,
                             ip_cidrs,
                             namespace=ns_name,
                             gateway_ips=gateway_ips,
                             extra_subnets=ex_gw_port.get('extra_subnets', []),
-                            preserve_ips=preserve_ips)
+                            preserve_ips=preserve_ips,
+                            enable_ra_on_gw=enable_ra_on_gw)
         for fixed_ip in ex_gw_port['fixed_ips']:
             ip_lib.send_gratuitous_arp(ns_name,
                                        interface_name,
                                        fixed_ip['ip_address'],
                                        self.agent_conf.send_arp_for_ha)
+
+    def is_v6_gateway_set(self, gateway_ips):
+        """Check to see if list of gateway_ips has an IPv6 gateway.
+        """
+        # Note - don't require a try-except here as all
+        # gateway_ips elements are valid addresses, if they exist.
+        return any(netaddr.IPAddress(gw_ip).version == 6
+                   for gw_ip in gateway_ips)
 
     def external_gateway_added(self, ex_gw_port, interface_name):
         preserve_ips = self._list_floating_ip_cidrs()
@@ -512,3 +553,23 @@ class RouterInfo(object):
                 fip_statuses = self.put_fips_in_error_state()
 
         agent.update_fip_statuses(self, existing_floating_ips, fip_statuses)
+
+    @common_utils.exception_logger()
+    def process(self, agent):
+        """Process updates to this router
+
+        This method is the point where the agent requests that updates be
+        applied to this router.
+
+        :param agent: Passes the agent in order to send RPC messages.
+        """
+        self._process_internal_ports()
+        self.process_external(agent)
+        # Process static routes for router
+        self.routes_updated()
+
+        # Update ex_gw_port and enable_snat on the router info cache
+        self.ex_gw_port = self.get_ex_gw_port()
+        self.snat_ports = self.router.get(
+            l3_constants.SNAT_ROUTER_INTF_KEY, [])
+        self.enable_snat = self.router.get('enable_snat')

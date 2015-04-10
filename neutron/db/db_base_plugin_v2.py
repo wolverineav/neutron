@@ -472,9 +472,9 @@ class NeutronDbPluginV2(neutron_plugin_base_v2.NeutronPluginBaseV2,
             # from subnet
             else:
                 if is_auto_addr:
-                    ip_address = self._calculate_ipv6_eui64_addr(context,
-                                                                 subnet,
-                                                                 mac_address)
+                    prefix = subnet['cidr']
+                    ip_address = ipv6_utils.get_ipv6_addr_by_EUI64(
+                        prefix, mac_address)
                     ips.append({'ip_address': ip_address.format(),
                                 'subnet_id': subnet['id']})
                 else:
@@ -531,17 +531,6 @@ class NeutronDbPluginV2(neutron_plugin_base_v2.NeutronPluginBaseV2,
             ips = self._allocate_fixed_ips(context, to_add, mac_address)
         return ips, prev_ips
 
-    def _calculate_ipv6_eui64_addr(self, context, subnet, mac_addr):
-        prefix = subnet['cidr']
-        network_id = subnet['network_id']
-        ip_address = ipv6_utils.get_ipv6_addr_by_EUI64(
-            prefix, mac_addr).format()
-        if not self._check_unique_ip(context, network_id,
-                                     subnet['id'], ip_address):
-            raise n_exc.IpAddressInUse(net_id=network_id,
-                                       ip_address=ip_address)
-        return ip_address
-
     def _allocate_ips_for_port(self, context, port):
         """Allocate IP addresses for the port.
 
@@ -596,8 +585,13 @@ class NeutronDbPluginV2(neutron_plugin_base_v2.NeutronPluginBaseV2,
         for subnet in v6_stateless:
             # IP addresses for IPv6 SLAAC and DHCPv6-stateless subnets
             # are implicitly included.
-            ip_address = self._calculate_ipv6_eui64_addr(context, subnet,
-                                                         p['mac_address'])
+            prefix = subnet['cidr']
+            ip_address = ipv6_utils.get_ipv6_addr_by_EUI64(prefix,
+                                                           p['mac_address'])
+            if not self._check_unique_ip(context, p['network_id'],
+                                         subnet['id'], ip_address.format()):
+                raise n_exc.IpAddressInUse(net_id=p['network_id'],
+                                           ip_address=ip_address.format())
             ips.append({'ip_address': ip_address.format(),
                         'subnet_id': subnet['id']})
 
@@ -844,9 +838,14 @@ class NeutronDbPluginV2(neutron_plugin_base_v2.NeutronPluginBaseV2,
                'mtu': network.get('mtu', constants.DEFAULT_NETWORK_MTU),
                'status': network['status'],
                'shared': network['shared'],
-               'vlan_transparent': network['vlan_transparent'],
                'subnets': [subnet['id']
                            for subnet in network['subnets']]}
+        # TODO(pritesh): Move vlan_transparent to the extension module.
+        # vlan_transparent here is only added if the vlantransparent
+        # extension is enabled.
+        if ('vlan_transparent' in network and network['vlan_transparent'] !=
+            attributes.ATTR_NOT_SPECIFIED):
+            res['vlan_transparent'] = network['vlan_transparent']
         # Call auxiliary extend functions, if any
         if process_extensions:
             self._apply_dict_extend_functions(
@@ -951,8 +950,13 @@ class NeutronDbPluginV2(neutron_plugin_base_v2.NeutronPluginBaseV2,
                     'admin_state_up': n['admin_state_up'],
                     'mtu': n.get('mtu', constants.DEFAULT_NETWORK_MTU),
                     'shared': n['shared'],
-                    'vlan_transparent': n.get('vlan_transparent', False),
                     'status': n.get('status', constants.NET_STATUS_ACTIVE)}
+            # TODO(pritesh): Move vlan_transparent to the extension module.
+            # vlan_transparent here is only added if the vlantransparent
+            # extension is enabled.
+            if ('vlan_transparent' in n and n['vlan_transparent'] !=
+                attributes.ATTR_NOT_SPECIFIED):
+                args['vlan_transparent'] = n['vlan_transparent']
             network = models_v2.Network(**args)
             context.session.add(network)
         return self._make_network_dict(network, process_extensions=False)
@@ -1250,9 +1254,6 @@ class NeutronDbPluginV2(neutron_plugin_base_v2.NeutronPluginBaseV2,
                                        s['dns_nameservers'],
                                        s['host_routes'],
                                        s['allocation_pools'])
-            # If this subnet supports auto-addressing, then update any
-            # internal ports on the network with addresses for this subnet.
-            self._add_auto_addrs_on_network_ports(context, subnet)
         if network.external:
             self._update_router_gw_ports(context,
                                          subnet['id'],
@@ -1279,9 +1280,6 @@ class NeutronDbPluginV2(neutron_plugin_base_v2.NeutronPluginBaseV2,
                                        s['dns_nameservers'],
                                        s['host_routes'],
                                        s['allocation_pools'])
-            # If this subnet supports auto-addressing, then update any
-            # internal ports on the network with addresses for this subnet.
-            self._add_auto_addrs_on_network_ports(context, subnet)
         if network.external:
             self._update_router_gw_ports(context,
                                          subnet['id'],
@@ -1347,25 +1345,6 @@ class NeutronDbPluginV2(neutron_plugin_base_v2.NeutronPluginBaseV2,
             # Create subnet from the implicit(AKA null) pool
             return self._create_subnet_from_implicit_pool(context, subnet)
         return self._create_subnet_from_pool(context, subnet, subnetpool_id)
-
-    def _add_auto_addrs_on_network_ports(self, context, subnet):
-        """If subnet uses auto-addressing, add addrs for ports on the net."""
-        if ipv6_utils.is_auto_address_subnet(subnet):
-            network_id = subnet['network_id']
-            port_qry = context.session.query(models_v2.Port)
-            for port in port_qry.filter(
-                and_(models_v2.Port.network_id == network_id,
-                     models_v2.Port.device_owner !=
-                     constants.DEVICE_OWNER_ROUTER_SNAT,
-                     ~models_v2.Port.device_owner.in_(
-                         constants.ROUTER_INTERFACE_OWNERS))):
-                ip_address = self._calculate_ipv6_eui64_addr(
-                    context, subnet, port['mac_address'])
-                allocated = models_v2.IPAllocation(network_id=network_id,
-                                                   port_id=port['id'],
-                                                   ip_address=ip_address,
-                                                   subnet_id=subnet['id'])
-                context.session.add(allocated)
 
     def _update_subnet_dns_nameservers(self, context, id, s):
         old_dns_list = self._get_dns_by_subnet(context, id)
@@ -1535,9 +1514,11 @@ class NeutronDbPluginV2(neutron_plugin_base_v2.NeutronPluginBaseV2,
             if not is_auto_addr_subnet:
                 alloc = self._subnet_check_ip_allocations(context, id)
                 if alloc:
-                    LOG.info(_LI("Found IP allocation %(alloc)s on subnet "
+                    LOG.info(_LI("Found port (%(port_id)s, %(ip)s) having IP "
+                                 "allocation on subnet "
                                  "%(subnet)s, cannot delete"),
-                             {'alloc': alloc,
+                             {'ip': alloc.ip_address,
+                              'port_id': alloc.port_id,
                               'subnet': id})
                     raise n_exc.SubnetInUse(subnet_id=id)
 

@@ -15,6 +15,7 @@
 
 import copy
 import functools
+import os.path
 
 import mock
 import netaddr
@@ -776,12 +777,21 @@ class MetadataFakeProxyHandler(object):
 
 class MetadataL3AgentTestCase(L3AgentTestFramework):
 
+    SOCKET_MODE = 0o644
+
     def _create_metadata_fake_server(self, status):
         server = utils.UnixDomainWSGIServer('metadata-fake-server')
         self.addCleanup(server.stop)
+
+        # NOTE(cbrandily): TempDir fixture creates a folder with 0o700
+        # permissions but metadata_proxy_socket folder must be readable by all
+        # users
+        self.useFixture(
+            helpers.RecursivePermDirFixture(
+                os.path.dirname(self.agent.conf.metadata_proxy_socket), 0o555))
         server.start(MetadataFakeProxyHandler(status),
                      self.agent.conf.metadata_proxy_socket,
-                     workers=0, backlog=4096)
+                     workers=0, backlog=4096, mode=self.SOCKET_MODE)
 
     def test_access_to_metadata_proxy(self):
         """Test access to the l3-agent metadata proxy.
@@ -828,6 +838,39 @@ class MetadataL3AgentTestCase(L3AgentTestFramework):
         # Check status code
         firstline = raw_headers.splitlines()[0]
         self.assertIn(str(webob.exc.HTTPOk.code), firstline.split())
+
+
+class UnprivilegedUserMetadataL3AgentTestCase(MetadataL3AgentTestCase):
+    """Test metadata proxy with least privileged user.
+
+    The least privileged user has uid=65534 and is commonly named 'nobody' but
+    not always, that's why we use its uid.
+    """
+
+    SOCKET_MODE = 0o664
+
+    def setUp(self):
+        super(UnprivilegedUserMetadataL3AgentTestCase, self).setUp()
+        self.agent.conf.set_override('metadata_proxy_user', '65534')
+        self.agent.conf.set_override('metadata_proxy_watch_log', False)
+
+
+class UnprivilegedUserGroupMetadataL3AgentTestCase(MetadataL3AgentTestCase):
+    """Test metadata proxy with least privileged user/group.
+
+    The least privileged user has uid=65534 and is commonly named 'nobody' but
+    not always, that's why we use its uid.
+    Its group has gid=65534 and is commonly named 'nobody' or 'nogroup', that's
+    why we use its gid.
+    """
+
+    SOCKET_MODE = 0o666
+
+    def setUp(self):
+        super(UnprivilegedUserGroupMetadataL3AgentTestCase, self).setUp()
+        self.agent.conf.set_override('metadata_proxy_user', '65534')
+        self.agent.conf.set_override('metadata_proxy_group', '65534')
+        self.agent.conf.set_override('metadata_proxy_watch_log', False)
 
 
 class TestDvrRouter(L3AgentTestFramework):
@@ -1077,6 +1120,26 @@ class TestDvrRouter(L3AgentTestFramework):
         self._create_router(restarted_agent, router1.router)
         self._assert_dvr_snat_gateway(router1)
         self.assertFalse(self._namespace_exists(fip_ns))
+
+    def test_dvr_router_add_internal_network_set_arp_cache(self):
+        # Check that, when the router is set up and there are
+        # existing ports on the the uplinked subnet, the ARP
+        # cache is properly populated.
+        self.agent.conf.agent_mode = 'dvr_snat'
+        router_info = test_l3_agent.prepare_router_data()
+        router_info['distributed'] = True
+        expected_neighbor = '35.4.1.10'
+        port_data = {
+            'fixed_ips': [{'ip_address': expected_neighbor}],
+            'mac_address': 'fa:3e:aa:bb:cc:dd',
+            'device_owner': 'compute:None'
+        }
+        self.agent.plugin_rpc.get_ports_by_subnet.return_value = [port_data]
+        router1 = self._create_router(self.agent, router_info)
+        internal_device = router1.get_internal_device_name(
+            router_info['_interfaces'][0]['id'])
+        neighbors = ip_lib.IPDevice(internal_device, router1.ns_name).neigh
+        self.assertEqual(expected_neighbor, neighbors.show().split()[0])
 
     def _assert_rfp_fpr_mtu(self, router, expected_mtu=1500):
         dev_mtu = self.get_device_mtu(

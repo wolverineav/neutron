@@ -29,7 +29,7 @@ import testscenarios
 
 from neutron.tests import base as tests_base
 from neutron.tests.retargetable import client_fixtures
-from neutron.tests.unit.ml2 import test_ml2_plugin
+from neutron.tests.unit.plugins.ml2 import test_plugin
 
 
 # Each plugin must add a class to plugin_configurations that can configure the
@@ -39,7 +39,7 @@ from neutron.tests.unit.ml2 import test_ml2_plugin
 
 # TODO(marun) Discover plugin conf via a metaclass
 plugin_configurations = [
-    test_ml2_plugin.Ml2ConfFixture(),
+    test_plugin.Ml2ConfFixture(),
 ]
 
 
@@ -77,4 +77,7 @@ class RetargetableApiTest(testscenarios.WithScenarios,
         if rest_enabled():
             raise self.skipException(
                 'Tempest fixture requirements prevent this test from running')
+        else:
+            raise self.skipException(
+                "Fullstack's db fixture usage prevents this test from running")
         self.useFixture(self.client)

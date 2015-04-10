@@ -109,7 +109,7 @@ class BigSwitchMechanismDriver(plugin.NeutronRestProxyV2Base,
                         self._send_all_data(
                             send_ports=topoargs['get_ports'],
                             send_floating_ips=topoargs['get_floating_ips'],
-                            send_routers=topoargs['get_routers'],
+                            send_routers=False,
                             triggered_by_tenant=port["network"]["tenant_id"]
                         )
 

@@ -975,8 +975,6 @@ class L3_NAT_dbonly_mixin(l3.RouterPluginBase):
             return []
         filters = {'id': gw_port_ids}
         gw_ports = self._core_plugin.get_ports(context, filters)
-        if gw_ports:
-            self._populate_subnet_for_ports(context, gw_ports)
         return gw_ports
 
     def get_sync_interfaces(self, context, router_ids, device_owners=None):
@@ -992,8 +990,6 @@ class L3_NAT_dbonly_mixin(l3.RouterPluginBase):
 
         interfaces = [self._core_plugin._make_port_dict(rp.port, None)
                       for rp in qry]
-        if interfaces:
-            self._populate_subnet_for_ports(context, interfaces)
         return interfaces
 
     def _populate_subnet_for_ports(self, context, ports):
@@ -1074,6 +1070,9 @@ class L3_NAT_dbonly_mixin(l3.RouterPluginBase):
     def get_sync_data(self, context, router_ids=None, active=None):
         routers, interfaces, floating_ips = self._get_router_info_list(
             context, router_ids=router_ids, active=active)
+        ports_to_populate = [router['gw_port'] for router in routers
+                             if router.get('gw_port')] + interfaces
+        self._populate_subnets_for_ports(context, ports_to_populate)
         routers_dict = dict((router['id'], router) for router in routers)
         self._process_floating_ips(context, routers_dict, floating_ips)
         self._process_interfaces(routers_dict, interfaces)

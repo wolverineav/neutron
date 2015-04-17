@@ -400,7 +400,7 @@ class L3_NAT_with_dvr_db_mixin(l3_db.L3_NAT_db_mixin,
         """Query all floating_ips and filter by particular host."""
         fip_count_on_host = 0
         with context.session.begin(subtransactions=True):
-            routers = self._get_sync_routers(context, router_ids=None)
+            routers = self.get_routers(context, filters=None)
             router_ids = [router['id'] for router in routers]
             floating_ips = self._get_sync_floating_ips(context, router_ids)
             # Check for the active floatingip in the host

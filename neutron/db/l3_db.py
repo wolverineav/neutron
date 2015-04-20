@@ -64,7 +64,8 @@ class RouterPort(model_base.BASEV2):
     port_type = sa.Column(sa.String(255))
     port = orm.relationship(
         models_v2.Port,
-        backref=orm.backref('routerport', uselist=False, cascade="all,delete"))
+        backref=orm.backref('routerport', uselist=False, cascade="all,delete"),
+        lazy='joined')
 
 
 class Router(model_base.BASEV2, models_v2.HasId, models_v2.HasTenant):
@@ -919,13 +920,12 @@ class L3_NAT_dbonly_mixin(l3.RouterPluginBase):
                                     'router_id': None})
         return router_ids
 
-    def _build_routers_list(self, context, routers, gw_ports):
-        for router in routers:
-            gw_port_id = router['gw_port_id']
-            # Collect gw ports only if available
-            if gw_port_id and gw_ports.get(gw_port_id):
-                router['gw_port'] = gw_ports[gw_port_id]
-        return routers
+    def _make_router_dict_with_gw_port(self, router, fields):
+        result = self._make_router_dict(router, fields)
+        if router.get('gw_port'):
+            result['gw_port'] = self._core_plugin._make_port_dict(
+                router['gw_port'], None)
+        return result
 
     def _get_sync_routers(self, context, router_ids=None, active=None):
         """Query routers and their gw ports for l3 agent.
@@ -943,40 +943,18 @@ class L3_NAT_dbonly_mixin(l3.RouterPluginBase):
         filters = {'id': router_ids} if router_ids else {}
         if active is not None:
             filters['admin_state_up'] = [active]
-        router_dicts = self.get_routers(context, filters=filters)
-        gw_port_ids = []
+        router_dicts = self._get_collection(
+            context, Router, self._make_router_dict_with_gw_port,
+            filters=filters)
         if not router_dicts:
             return []
-        for router_dict in router_dicts:
-            gw_port_id = router_dict['gw_port_id']
-            if gw_port_id:
-                gw_port_ids.append(gw_port_id)
-        gw_ports = []
-        if gw_port_ids:
-            gw_ports = dict((gw_port['id'], gw_port)
-                            for gw_port in
-                            self.get_sync_gw_ports(context, gw_port_ids))
-        # NOTE(armando-migliaccio): between get_routers and get_sync_gw_ports
-        # gw ports may get deleted, which means that router_dicts may contain
-        # ports that gw_ports does not; we should rebuild router_dicts, but
-        # letting the callee check for missing gw_ports sounds like a good
-        # defensive approach regardless
-        return self._build_routers_list(context, router_dicts, gw_ports)
+        return router_dicts
 
     def _get_sync_floating_ips(self, context, router_ids):
         """Query floating_ips that relate to list of router_ids."""
         if not router_ids:
             return []
         return self.get_floatingips(context, {'router_id': router_ids})
-
-    def get_sync_gw_ports(self, context, gw_port_ids):
-        if not gw_port_ids:
-            return []
-        filters = {'id': gw_port_ids}
-        gw_ports = self._core_plugin.get_ports(context, filters)
-        if gw_ports:
-            self._populate_subnet_for_ports(context, gw_ports)
-        return gw_ports
 
     def get_sync_interfaces(self, context, router_ids, device_owners=None):
         """Query router interfaces that relate to list of router_ids."""
@@ -989,12 +967,8 @@ class L3_NAT_dbonly_mixin(l3.RouterPluginBase):
             RouterPort.port_type.in_(device_owners)
         )
 
-        # TODO(markmcclain): This is suboptimal but was left to reduce
-        # changeset size since it is late in cycle
-        ports = [rp.port.id for rp in qry]
-        interfaces = self._core_plugin.get_ports(context, {'id': ports})
-        if interfaces:
-            self._populate_subnet_for_ports(context, interfaces)
+        interfaces = [self._core_plugin._make_port_dict(rp.port, None)
+                      for rp in qry]
         return interfaces
 
     def _populate_subnet_for_ports(self, context, ports):
@@ -1075,6 +1049,9 @@ class L3_NAT_dbonly_mixin(l3.RouterPluginBase):
     def get_sync_data(self, context, router_ids=None, active=None):
         routers, interfaces, floating_ips = self._get_router_info_list(
             context, router_ids=router_ids, active=active)
+        ports_to_populate = [router['gw_port'] for router in routers
+                             if router.get('gw_port')] + interfaces
+        self._populate_subnets_for_ports(context, ports_to_populate)
         routers_dict = dict((router['id'], router) for router in routers)
         self._process_floating_ips(context, routers_dict, floating_ips)
         self._process_interfaces(routers_dict, interfaces)

@@ -272,13 +272,9 @@ class L3_NAT_with_dvr_db_mixin(l3_db.L3_NAT_db_mixin,
             l3_db.RouterPort.port_type == DEVICE_OWNER_DVR_SNAT
         )
 
-        # TODO(markmcclain): This is suboptimal but was left to reduce
-        # changeset size since it is late in cycle
-        ports = [rp.port.id for rp in qry]
-        interfaces = self._core_plugin.get_ports(context, {'id': ports})
+        interfaces = [self._core_plugin._make_port_dict(rp.port, None)
+                      for rp in qry]
         LOG.debug("Return the SNAT ports: %s", interfaces)
-        if interfaces:
-            self._populate_subnet_for_ports(context, interfaces)
         return interfaces
 
     def _build_routers_list(self, context, routers, gw_ports):
@@ -353,8 +349,6 @@ class L3_NAT_with_dvr_db_mixin(l3_db.L3_NAT_db_mixin,
                    'device_owner': [DEVICE_OWNER_AGENT_GW]}
         interfaces = self._core_plugin.get_ports(context.elevated(), filters)
         LOG.debug("Return the FIP ports: %s ", interfaces)
-        if interfaces:
-            self._populate_subnet_for_ports(context, interfaces)
         return interfaces
 
     def get_sync_data(self, context, router_ids=None, active=None):
@@ -367,6 +361,14 @@ class L3_NAT_with_dvr_db_mixin(l3_db.L3_NAT_db_mixin,
             fip['host'] = self.get_vm_port_hostid(context, fip['port_id'])
         routers_dict = self._process_routers(context, routers)
         self._process_floating_ips(context, routers_dict, floating_ips)
+        ports_to_populate = []
+        for router in routers_dict.values():
+            if router.get('gw_port'):
+                ports_to_populate.append(router['gw_port'])
+            if router.get(l3_const.FLOATINGIP_AGENT_INTF_KEY):
+                ports_to_populate += router[l3_const.FLOATINGIP_AGENT_INTF_KEY]
+        ports_to_populate += interfaces
+        self._populate_subnets_for_ports(context, ports_to_populate)
         self._process_interfaces(routers_dict, interfaces)
         return routers_dict.values()
 
@@ -398,7 +400,7 @@ class L3_NAT_with_dvr_db_mixin(l3_db.L3_NAT_db_mixin,
         """Query all floating_ips and filter by particular host."""
         fip_count_on_host = 0
         with context.session.begin(subtransactions=True):
-            routers = self._get_sync_routers(context, router_ids=None)
+            routers = self.get_routers(context, filters=None)
             router_ids = [router['id'] for router in routers]
             floating_ips = self._get_sync_floating_ips(context, router_ids)
             # Check for the active floatingip in the host
@@ -463,16 +465,15 @@ class L3_NAT_with_dvr_db_mixin(l3_db.L3_NAT_db_mixin,
 
     def get_snat_interface_ports_for_router(self, context, router_id):
         """Return all existing snat_router_interface ports."""
-        # TODO(markmcclain): This is suboptimal but was left to reduce
-        # changeset size since it is late in cycle
         qry = context.session.query(l3_db.RouterPort)
         qry = qry.filter_by(
             router_id=router_id,
             port_type=DEVICE_OWNER_DVR_SNAT
         )
 
-        ports = [rp.port.id for rp in qry]
-        return self._core_plugin.get_ports(context, {'id': ports})
+        ports = [self._core_plugin._make_port_dict(rp.port, None)
+                 for rp in qry]
+        return ports
 
     def add_csnat_router_interface_port(
             self, context, router, network_id, subnet_id, do_pop=True):

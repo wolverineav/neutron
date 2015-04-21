@@ -1051,7 +1051,7 @@ class L3_NAT_dbonly_mixin(l3.RouterPluginBase):
             context, router_ids=router_ids, active=active)
         ports_to_populate = [router['gw_port'] for router in routers
                              if router.get('gw_port')] + interfaces
-        self._populate_subnets_for_ports(context, ports_to_populate)
+        self._populate_subnet_for_ports(context, ports_to_populate)
         routers_dict = dict((router['id'], router) for router in routers)
         self._process_floating_ips(context, routers_dict, floating_ips)
         self._process_interfaces(routers_dict, interfaces)

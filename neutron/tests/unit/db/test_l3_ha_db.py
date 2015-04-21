@@ -119,7 +119,8 @@ class L3HAGetSyncDataTestCase(L3HATestFramework):
 
         self.assertEqual(constants.DEVICE_OWNER_ROUTER_HA_INTF,
                          interface['device_owner'])
-        self.assertEqual(cfg.CONF.l3_ha_net_cidr, interface['subnet']['cidr'])
+        self.assertEqual(cfg.CONF.l3_ha_net_cidr,
+                         interface['subnets'][0]['cidr'])
 
     def test_update_state(self):
         router = self._create_router()

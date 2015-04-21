@@ -368,7 +368,7 @@ class L3_NAT_with_dvr_db_mixin(l3_db.L3_NAT_db_mixin,
             if router.get(l3_const.FLOATINGIP_AGENT_INTF_KEY):
                 ports_to_populate += router[l3_const.FLOATINGIP_AGENT_INTF_KEY]
         ports_to_populate += interfaces
-        self._populate_subnets_for_ports(context, ports_to_populate)
+        self._populate_subnet_for_ports(context, ports_to_populate)
         self._process_interfaces(routers_dict, interfaces)
         return routers_dict.values()
 
@@ -455,12 +455,12 @@ class L3_NAT_with_dvr_db_mixin(l3_db.L3_NAT_db_mixin,
                               'admin_state_up': True,
                               'name': ''}})
                 if agent_port:
-                    self._populate_subnets_for_ports(context, [agent_port])
+                    self._populate_subnet_for_ports(context, [agent_port])
                     return agent_port
                 msg = _("Unable to create the Agent Gateway Port")
                 raise n_exc.BadRequest(resource='router', msg=msg)
             else:
-                self._populate_subnets_for_ports(context, [f_port])
+                self._populate_subnet_for_ports(context, [f_port])
                 return f_port
 
     def get_snat_interface_ports_for_router(self, context, router_id):
@@ -501,7 +501,7 @@ class L3_NAT_with_dvr_db_mixin(l3_db.L3_NAT_db_mixin,
             context.session.add(router_port)
 
         if do_pop:
-            return self._populate_subnets_for_ports(context, [snat_port])
+            return self._populate_subnet_for_ports(context, [snat_port])
         return snat_port
 
     def create_snat_intf_ports_if_not_exists(self, context, router):
@@ -514,7 +514,7 @@ class L3_NAT_with_dvr_db_mixin(l3_db.L3_NAT_db_mixin,
         port_list = self.get_snat_interface_ports_for_router(
             context, router.id)
         if port_list:
-            self._populate_subnets_for_ports(context, port_list)
+            self._populate_subnet_for_ports(context, port_list)
             return port_list
         port_list = []
 
@@ -536,7 +536,7 @@ class L3_NAT_with_dvr_db_mixin(l3_db.L3_NAT_db_mixin,
                     intf['fixed_ips'][0]['subnet_id'], do_pop=False)
                 port_list.append(snat_port)
         if port_list:
-            self._populate_subnets_for_ports(context, port_list)
+            self._populate_subnet_for_ports(context, port_list)
         return port_list
 
     def dvr_vmarp_table_update(self, context, port_id, action):

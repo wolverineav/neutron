@@ -38,7 +38,6 @@ from neutron.agent.linux import external_process
 from neutron.agent.linux import ip_lib
 from neutron.agent.linux import utils
 from neutron.callbacks import events
-from neutron.callbacks import manager
 from neutron.callbacks import registry
 from neutron.callbacks import resources
 from neutron.common import config as common_config
@@ -65,12 +64,6 @@ class L3AgentTestFramework(base.BaseLinuxTestCase):
     def setUp(self):
         super(L3AgentTestFramework, self).setUp()
         mock.patch('neutron.agent.l3.agent.L3PluginApi').start()
-
-        # TODO(pcm): Move this to BaseTestCase, if we find that more tests
-        # use this mechanism.
-        self._callback_manager = manager.CallbacksManager()
-        mock.patch.object(registry, '_get_callback_manager',
-                          return_value=self._callback_manager).start()
         self.agent = self._configure_agent('agent1')
 
     def _get_config_opts(self):
@@ -133,11 +126,7 @@ class L3AgentTestFramework(base.BaseLinuxTestCase):
                                                      v6_ext_gw_with_sub))
 
     def manage_router(self, agent, router):
-        self.addCleanup(self._delete_router, agent, router['id'])
-        ri = self._create_router(agent, router)
-        return ri
-
-    def _create_router(self, agent, router):
+        self.addCleanup(agent._safe_router_removed, router['id'])
         agent._process_added_router(router)
         return agent.router_info[router['id']]
 
@@ -666,7 +655,7 @@ class L3AgentTestCase(L3AgentTestFramework):
         self._add_fip(router1, '192.168.111.12')
         restarted_agent = neutron_l3_agent.L3NATAgentWithStateReport(
             self.agent.host, self.agent.conf)
-        self._create_router(restarted_agent, router1.router)
+        self.manage_router(restarted_agent, router1.router)
         utils.wait_until_true(lambda: self.floating_ips_configured(router1))
         self.assertIn(
             router1._get_primary_vip(),
@@ -1143,13 +1132,13 @@ class TestDvrRouter(L3AgentTestFramework):
     def test_dvr_router_rem_fips_on_restarted_agent(self):
         self.agent.conf.agent_mode = 'dvr_snat'
         router_info = self.generate_dvr_router_info()
-        router1 = self._create_router(self.agent, router_info)
+        router1 = self.manage_router(self.agent, router_info)
         self._add_fip(router1, '192.168.111.12', self.agent.conf.host)
         fip_ns = router1.fip_ns.get_name()
         restarted_agent = neutron_l3_agent.L3NATAgentWithStateReport(
             self.agent.host, self.agent.conf)
         router1.router[l3_constants.FLOATINGIP_KEY] = []
-        self._create_router(restarted_agent, router1.router)
+        self.manage_router(restarted_agent, router1.router)
         self._assert_dvr_snat_gateway(router1)
         self.assertFalse(self._namespace_exists(fip_ns))
 
@@ -1167,7 +1156,7 @@ class TestDvrRouter(L3AgentTestFramework):
             'device_owner': 'compute:None'
         }
         self.agent.plugin_rpc.get_ports_by_subnet.return_value = [port_data]
-        router1 = self._create_router(self.agent, router_info)
+        router1 = self.manage_router(self.agent, router_info)
         internal_device = router1.get_internal_device_name(
             router_info['_interfaces'][0]['id'])
         neighbors = ip_lib.IPDevice(internal_device, router1.ns_name).neigh

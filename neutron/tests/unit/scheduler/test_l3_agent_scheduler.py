@@ -808,21 +808,20 @@ class L3SchedulerTestBaseMixin(object):
         self.assertEqual([], agents)
 
 
-class L3SchedulerTestCase(l3_agentschedulers_db.L3AgentSchedulerDbMixin,
-                          l3_db.L3_NAT_db_mixin,
-                          common_db_mixin.CommonDbMixin,
-                          test_db_base_plugin_v2.NeutronDbPluginV2TestCase,
-                          test_l3.L3NatTestCaseMixin,
-                          L3SchedulerBaseMixin,
-                          L3SchedulerTestBaseMixin):
+class L3SchedulerTestCaseMixin(l3_agentschedulers_db.L3AgentSchedulerDbMixin,
+                               l3_db.L3_NAT_db_mixin,
+                               common_db_mixin.CommonDbMixin,
+                               test_l3.L3NatTestCaseMixin,
+                               L3SchedulerBaseMixin,
+                               L3SchedulerTestBaseMixin):
 
     def setUp(self):
         self.mock_rescheduling = False
         ext_mgr = test_l3.L3TestExtensionManager()
         plugin_str = ('neutron.tests.unit.extensions.test_l3.'
                       'TestL3NatIntAgentSchedulingPlugin')
-        super(L3SchedulerTestCase, self).setUp(plugin=plugin_str,
-                                               ext_mgr=ext_mgr)
+        super(L3SchedulerTestCaseMixin, self).setUp(plugin=plugin_str,
+                                                    ext_mgr=ext_mgr)
 
         self.adminContext = q_context.get_admin_context()
         self.plugin = manager.NeutronManager.get_plugin()
@@ -832,7 +831,9 @@ class L3SchedulerTestCase(l3_agentschedulers_db.L3AgentSchedulerDbMixin,
         self._register_l3_agents()
 
 
-class L3AgentChanceSchedulerTestCase(L3SchedulerTestCase):
+class L3AgentChanceSchedulerTestCase(L3SchedulerTestCaseMixin,
+                                     test_db_base_plugin_v2.
+                                     NeutronDbPluginV2TestCase):
 
     def test_random_scheduling(self):
         random_patch = mock.patch('random.choice')
@@ -888,7 +889,10 @@ class L3AgentChanceSchedulerTestCase(L3SchedulerTestCase):
                 self.assertEqual('host_1', agents[0]['host'])
 
 
-class L3AgentLeastRoutersSchedulerTestCase(L3SchedulerTestCase):
+class L3AgentLeastRoutersSchedulerTestCase(L3SchedulerTestCaseMixin,
+                                           test_db_base_plugin_v2.
+                                           NeutronDbPluginV2TestCase):
+
     def setUp(self):
         super(L3AgentLeastRoutersSchedulerTestCase, self).setUp()
         self.plugin.router_scheduler = importutils.import_object(
@@ -1641,10 +1645,10 @@ class L3HAChanceSchedulerTestCase(L3HATestCaseMixin):
             admin_state_up=True)
         self.assertEqual(2, len(agents))
 
+        r2 = self._create_ha_router()
         self._set_l3_agent_admin_state(self.adminContext,
                                        self.agent_id2, False)
 
-        r2 = self._create_ha_router()
         self.plugin.schedule_router(self.adminContext, r2['id'])
         agents = self.plugin.get_l3_agents_hosting_routers(
             self.adminContext, [r2['id']],

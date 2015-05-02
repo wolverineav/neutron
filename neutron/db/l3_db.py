@@ -969,6 +969,8 @@ class L3_NAT_dbonly_mixin(l3.RouterPluginBase):
 
         interfaces = [self._core_plugin._make_port_dict(rp.port, None)
                       for rp in qry]
+        if interfaces:
+            self._populate_subnet_for_ports(context, interfaces)
         return interfaces
 
     def _populate_subnet_for_ports(self, context, ports):

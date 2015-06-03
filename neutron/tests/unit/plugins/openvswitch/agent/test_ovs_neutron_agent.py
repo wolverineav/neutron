@@ -45,6 +45,14 @@ class FakeVif(object):
     port_name = 'name'
 
 
+class MockFixedIntervalLoopingCall(object):
+    def __init__(self, f):
+        self.f = f
+
+    def start(self, interval=0):
+        self.f()
+
+
 class CreateAgentConfigMap(ovs_test_base.OVSAgentConfigTestBase):
 
     def test_create_agent_config_map_succeeds(self):
@@ -105,13 +113,6 @@ class TestOvsNeutronAgent(object):
         cfg.CONF.set_default('quitting_rpc_timeout', 10, 'AGENT')
         cfg.CONF.set_default('prevent_arp_spoofing', False, 'AGENT')
         kwargs = self.mod_agent.create_agent_config_map(cfg.CONF)
-
-        class MockFixedIntervalLoopingCall(object):
-            def __init__(self, f):
-                self.f = f
-
-            def start(self, interval=0):
-                self.f()
 
         with mock.patch.object(self.mod_agent.OVSNeutronAgent,
                                'setup_integration_br'),\
@@ -631,15 +632,15 @@ class TestOvsNeutronAgent(object):
                              "phys_veth_ofport")
 
     def test_get_peer_name(self):
-            bridge1 = "A_REALLY_LONG_BRIDGE_NAME1"
-            bridge2 = "A_REALLY_LONG_BRIDGE_NAME2"
-            self.agent.use_veth_interconnection = True
-            self.assertEqual(len(self.agent.get_peer_name('int-', bridge1)),
-                             n_const.DEVICE_NAME_MAX_LEN)
-            self.assertEqual(len(self.agent.get_peer_name('int-', bridge2)),
-                             n_const.DEVICE_NAME_MAX_LEN)
-            self.assertNotEqual(self.agent.get_peer_name('int-', bridge1),
-                                self.agent.get_peer_name('int-', bridge2))
+        bridge1 = "A_REALLY_LONG_BRIDGE_NAME1"
+        bridge2 = "A_REALLY_LONG_BRIDGE_NAME2"
+        self.agent.use_veth_interconnection = True
+        self.assertEqual(len(self.agent.get_peer_name('int-', bridge1)),
+                         n_const.DEVICE_NAME_MAX_LEN)
+        self.assertEqual(len(self.agent.get_peer_name('int-', bridge2)),
+                         n_const.DEVICE_NAME_MAX_LEN)
+        self.assertNotEqual(self.agent.get_peer_name('int-', bridge1),
+                            self.agent.get_peer_name('int-', bridge2))
 
     def test_setup_tunnel_br(self):
         self.tun_br = mock.Mock()
@@ -1228,13 +1229,6 @@ class TestOvsDvrNeutronAgent(object):
                              'neutron.agent.firewall.NoopFirewallDriver',
                              group='SECURITYGROUP')
         kwargs = self.mod_agent.create_agent_config_map(cfg.CONF)
-
-        class MockFixedIntervalLoopingCall(object):
-            def __init__(self, f):
-                self.f = f
-
-            def start(self, interval=0):
-                self.f()
 
         with mock.patch.object(self.mod_agent.OVSNeutronAgent,
                                'setup_integration_br'),\

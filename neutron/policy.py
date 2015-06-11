@@ -18,11 +18,12 @@ Policy engine for neutron.  Largely copied from nova.
 """
 
 import collections
-import itertools
 import logging as std_logging
 import re
 
+from oslo_config import cfg
 from oslo_log import log as logging
+from oslo_policy import policy
 from oslo_utils import excutils
 from oslo_utils import importutils
 import six
@@ -30,8 +31,7 @@ import six
 from neutron.api.v2 import attributes
 from neutron.common import constants as const
 from neutron.common import exceptions
-from neutron.i18n import _LE, _LI, _LW
-from neutron.openstack.common import policy
+from neutron.i18n import _LE, _LW
 
 
 LOG = logging.getLogger(__name__)
@@ -39,22 +39,6 @@ LOG = logging.getLogger(__name__)
 _ENFORCER = None
 ADMIN_CTX_POLICY = 'context_is_admin'
 ADVSVC_CTX_POLICY = 'context_is_advsvc'
-# Maps deprecated 'extension' policies to new-style policies
-DEPRECATED_POLICY_MAP = {
-    'extension:provider_network':
-    ['network:provider:network_type',
-     'network:provider:physical_network',
-     'network:provider:segmentation_id'],
-    'extension:router':
-    ['network:router:external'],
-    'extension:port_binding':
-    ['port:binding:vif_type', 'port:binding:vif_details',
-     'port:binding:profile', 'port:binding:host_id']
-}
-DEPRECATED_ACTION_MAP = {
-    'view': ['get'],
-    'set': ['create', 'update']
-}
 
 
 def reset():
@@ -64,19 +48,19 @@ def reset():
         _ENFORCER = None
 
 
-def init():
+def init(conf=cfg.CONF, policy_file=None):
     """Init an instance of the Enforcer class."""
 
     global _ENFORCER
     if not _ENFORCER:
-        _ENFORCER = policy.Enforcer()
+        _ENFORCER = policy.Enforcer(conf, policy_file=policy_file)
         _ENFORCER.load_rules(True)
 
 
-def refresh():
+def refresh(policy_file=None):
     """Reset policy and init a new instance of Enforcer."""
     reset()
-    init()
+    init(policy_file=policy_file)
 
 
 def get_resource_and_action(action, pluralized=None):
@@ -95,35 +79,6 @@ def set_rules(policies, overwrite=True):
     """
 
     LOG.debug("Loading policies from file: %s", _ENFORCER.policy_path)
-    # Ensure backward compatibility with folsom/grizzly convention
-    # for extension rules
-    for pol in policies.keys():
-        if any([pol.startswith(depr_pol) for depr_pol in
-                DEPRECATED_POLICY_MAP.keys()]):
-            LOG.warn(_LW("Found deprecated policy rule:%s. Please consider "
-                         "upgrading your policy configuration file"), pol)
-            pol_name, action = pol.rsplit(':', 1)
-            try:
-                new_actions = DEPRECATED_ACTION_MAP[action]
-                new_policies = DEPRECATED_POLICY_MAP[pol_name]
-                # bind new actions and policies together
-                for actual_policy in ['_'.join(item) for item in
-                                      itertools.product(new_actions,
-                                                        new_policies)]:
-                    if actual_policy not in policies:
-                        # New policy, same rule
-                        LOG.info(_LI("Inserting policy:%(new_policy)s in "
-                                     "place of deprecated "
-                                     "policy:%(old_policy)s"),
-                                 {'new_policy': actual_policy,
-                                  'old_policy': pol})
-                        policies[actual_policy] = policies[pol]
-                # Remove old-style policy
-                del policies[pol]
-            except KeyError:
-                LOG.error(_LE("Backward compatibility unavailable for "
-                              "deprecated policy %s. The policy will "
-                              "not be enforced"), pol)
     init()
     _ENFORCER.set_rules(policies, overwrite)
 
@@ -418,7 +373,7 @@ def enforce(context, action, target, plugin=None, pluralized=None):
     :param pluralized: pluralized case of resource
         e.g. firewall_policy -> pluralized = "firewall_policies"
 
-    :raises neutron.openstack.common.policy.PolicyNotAuthorized:
+    :raises oslo_policy.policy.PolicyNotAuthorized:
             if verification fails.
     """
     # If we already know the context has admin rights do not perform an

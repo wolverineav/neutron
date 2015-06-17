@@ -1,4 +1,4 @@
-# Copyright 2014 OpenStack Foundation
+# Copyright 2014 Red Hat, Inc.
 #
 #    Licensed under the Apache License, Version 2.0 (the "License"); you may
 #    not use this file except in compliance with the License. You may obtain
@@ -11,25 +11,21 @@
 #    WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
 #    License for the specific language governing permissions and limitations
 #    under the License.
-#
 
-"""metering_label_shared
+from oslo_concurrency import processutils
+from oslo_config import cfg
 
-Revision ID: 3c346828361e
-Revises: 16a27a58e093
-Create Date: 2014-08-27 15:03:46.537290
-
-"""
-
-# revision identifiers, used by Alembic.
-revision = '3c346828361e'
-down_revision = '16a27a58e093'
-
-from alembic import op
-import sqlalchemy as sa
+from neutron import service
+from neutron.tests import base
 
 
-def upgrade():
-    op.add_column('meteringlabels', sa.Column('shared', sa.Boolean(),
-                                              server_default=sa.sql.false(),
-                                              nullable=True))
+class TestService(base.BaseTestCase):
+
+    def test_api_workers_default(self):
+        self.assertEqual(processutils.get_worker_count(),
+                         service._get_api_workers())
+
+    def test_api_workers_from_config(self):
+        cfg.CONF.set_override('api_workers', 1234)
+        self.assertEqual(1234,
+                         service._get_api_workers())

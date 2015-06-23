@@ -552,16 +552,7 @@ class NeutronDbPluginV2(ipam_non_pluggable_backend.IpamNonPluggableBackend,
                     nexthop=rt['nexthop'])
                 context.session.add(route)
 
-        for pool in allocation_pools:
-            ip_pool = models_v2.IPAllocationPool(subnet=subnet,
-                                                 first_ip=pool['start'],
-                                                 last_ip=pool['end'])
-            context.session.add(ip_pool)
-            ip_range = models_v2.IPAvailabilityRange(
-                ipallocationpool=ip_pool,
-                first_ip=pool['start'],
-                last_ip=pool['end'])
-            context.session.add(ip_range)
+        self._save_allocation_pools(context, subnet, allocation_pools)
 
         return subnet
 
@@ -591,23 +582,11 @@ class NeutronDbPluginV2(ipam_non_pluggable_backend.IpamNonPluggableBackend,
     def _create_subnet_from_pool(self, context, subnet, subnetpool_id):
         s = subnet['subnet']
         tenant_id = self._get_tenant_id_for_create(context, s)
-        has_allocpool = attributes.is_attr_set(s['allocation_pools'])
-        is_any_subnetpool_request = not attributes.is_attr_set(s['cidr'])
-        if is_any_subnetpool_request and has_allocpool:
-            reason = _("allocation_pools allowed only "
-                       "for specific subnet requests.")
-            raise n_exc.BadRequest(resource='subnets', msg=reason)
+        self._validate_pools_with_subnetpool(s)
 
         with context.session.begin(subtransactions=True):
             subnetpool = self._get_subnetpool(context, subnetpool_id)
-            ip_version = s.get('ip_version')
-            has_ip_version = attributes.is_attr_set(ip_version)
-            if has_ip_version and ip_version != subnetpool.ip_version:
-                args = {'req_ver': str(s['ip_version']),
-                        'pool_ver': str(subnetpool.ip_version)}
-                reason = _("Cannot allocate IPv%(req_ver)s subnet from "
-                           "IPv%(pool_ver)s subnet pool") % args
-                raise n_exc.BadRequest(resource='subnets', msg=reason)
+            self._validate_ip_version_with_subnetpool(s, subnetpool)
 
             network = self._get_network(context, s["network_id"])
             allocator = subnet_alloc.SubnetAllocator(subnetpool, context)
@@ -1031,14 +1010,7 @@ class NeutronDbPluginV2(ipam_non_pluggable_backend.IpamNonPluggableBackend,
                 db_port = self._create_port_with_mac(
                     context, network_id, port_data, p['mac_address'])
 
-            # Update the IP's for the port
-            ips = self._allocate_ips_for_port(context, port)
-            if ips:
-                for ip in ips:
-                    ip_address = ip['ip_address']
-                    subnet_id = ip['subnet_id']
-                    NeutronDbPluginV2._store_ip_allocation(
-                        context, ip_address, network_id, subnet_id, port_id)
+            self._allocate_ips_for_port_and_store(context, port, port_id)
 
         return self._make_port_dict(db_port, process_extensions=False)
 
@@ -1093,13 +1065,6 @@ class NeutronDbPluginV2(ipam_non_pluggable_backend.IpamNonPluggableBackend,
                 LOG.debug("Ignoring PortNotFound when deleting port '%s'. "
                           "The port has already been deleted.",
                           port_id)
-
-    def _delete_port(self, context, id):
-        query = (context.session.query(models_v2.Port).
-                 enable_eagerloads(False).filter_by(id=id))
-        if not context.is_admin:
-            query = query.filter_by(tenant_id=context.tenant_id)
-        query.delete()
 
     def get_port(self, context, id, fields=None):
         port = self._get_port(context, id)

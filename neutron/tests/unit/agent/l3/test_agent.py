@@ -22,6 +22,7 @@ import mock
 import netaddr
 from oslo_log import log
 import oslo_messaging
+from oslo_utils import uuidutils
 from testtools import matchers
 
 from neutron.agent.common import config as agent_config
@@ -46,7 +47,6 @@ from neutron.common import config as base_config
 from neutron.common import constants as l3_constants
 from neutron.common import exceptions as n_exc
 from neutron.i18n import _LE
-from neutron.openstack.common import uuidutils
 from neutron.plugins.common import constants as p_const
 from neutron.tests import base
 from neutron.tests.common import l3_test_common
@@ -2005,7 +2005,6 @@ class TestBasicRouterOperations(BasicRouterOperationsFramework):
         self.external_process_p.stop()
         self.ip_cls_p.stop()
 
-        ensure_dir = 'neutron.agent.linux.utils.ensure_dir'
         get_conf_file_name = 'neutron.agent.linux.utils.get_conf_file_name'
         get_pid_file_name = ('neutron.agent.linux.external_process.'
                              'ProcessManager.get_pid_file_name')
@@ -2013,7 +2012,6 @@ class TestBasicRouterOperations(BasicRouterOperationsFramework):
 
         mock.patch(get_conf_file_name).start().return_value = conffile
         mock.patch(get_pid_file_name).start().return_value = pidfile
-        mock.patch(ensure_dir).start()
         execute = mock.patch(utils_execute).start()
 
         radvd = ra.DaemonMonitor(

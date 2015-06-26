@@ -336,7 +336,6 @@ class OVSNeutronAgent(sg_rpc.SecurityGroupAgentRpcCallbackMixin,
         # Define the listening consumers for the agent
         consumers = [[topics.PORT, topics.UPDATE],
                      [topics.PORT, topics.DELETE],
-                     [topics.NETWORK, topics.DELETE],
                      [constants.TUNNEL, topics.UPDATE],
                      [constants.TUNNEL, topics.DELETE],
                      [topics.SECURITY_GROUP, topics.UPDATE],
@@ -353,17 +352,6 @@ class OVSNeutronAgent(sg_rpc.SecurityGroupAgentRpcCallbackMixin,
         for network_id, vlan_mapping in six.iteritems(self.local_vlan_map):
             if vif_id in vlan_mapping.vif_ports:
                 return network_id
-
-    def network_delete(self, context, **kwargs):
-        LOG.debug("network_delete received")
-        network_id = kwargs.get('network_id')
-        LOG.debug("Delete %s", network_id)
-        # The network may not be defined on this agent
-        lvm = self.local_vlan_map.get(network_id)
-        if lvm:
-            self.reclaim_local_vlan(network_id)
-        else:
-            LOG.debug("Network %s not used on agent.", network_id)
 
     def port_update(self, context, **kwargs):
         port = kwargs.get('port')
@@ -1687,7 +1675,7 @@ def main(bridge_classes):
     prepare_xen_compute()
     try:
         agent = OVSNeutronAgent(bridge_classes, **agent_config)
-    except RuntimeError as e:
+    except (RuntimeError, ValueError) as e:
         LOG.error(_LE("%s Agent terminated!"), e)
         sys.exit(1)
     agent.daemon_loop()

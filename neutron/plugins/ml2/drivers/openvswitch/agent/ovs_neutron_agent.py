@@ -200,7 +200,9 @@ class OVSNeutronAgent(sg_rpc.SecurityGroupAgentRpcCallbackMixin,
                                'arp_responder_enabled':
                                self.arp_responder_enabled,
                                'enable_distributed_routing':
-                               self.enable_distributed_routing},
+                               self.enable_distributed_routing,
+                               'log_agent_heartbeats':
+                               self.conf.AGENT.log_agent_heartbeats},
             'agent_type': q_const.AGENT_TYPE_OVS,
             'start_flag': True}
 
@@ -858,7 +860,7 @@ class OVSNeutronAgent(sg_rpc.SecurityGroupAgentRpcCallbackMixin,
         br_names = []
         for bridge in ovs_bridges:
             bridge_id = ovs.get_bridge_external_bridge_id(bridge)
-            if bridge_id and bridge_id != bridge:
+            if bridge_id != bridge:
                 br_names.append(bridge)
         ovs_bridges.difference_update(br_names)
         ancillary_bridges = []

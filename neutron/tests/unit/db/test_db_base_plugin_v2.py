@@ -22,6 +22,7 @@ import netaddr
 from oslo_config import cfg
 from oslo_db import exception as db_exc
 from oslo_utils import importutils
+import six
 from sqlalchemy import orm
 from testtools import matchers
 import webob.exc
@@ -36,6 +37,7 @@ from neutron.callbacks import registry
 from neutron.common import constants
 from neutron.common import exceptions as n_exc
 from neutron.common import ipv6_utils
+from neutron.common import test_lib
 from neutron.common import utils
 from neutron import context
 from neutron.db import db_base_plugin_v2
@@ -104,8 +106,11 @@ class NeutronDbPluginV2TestCase(testlib_api.WebTestCase):
 
         # Update the plugin
         self.setup_coreplugin(plugin)
-        service_plugins = (service_plugins or {}).values()
-        cfg.CONF.set_override('service_plugins', list(service_plugins))
+        cfg.CONF.set_override(
+            'service_plugins',
+            [test_lib.test_config.get(key, default)
+             for key, default in six.iteritems(service_plugins or {})]
+        )
 
         cfg.CONF.set_override('base_mac', "12:34:56:78:90:ab")
         cfg.CONF.set_override('max_dns_nameservers', 2)
@@ -156,6 +161,14 @@ class NeutronDbPluginV2TestCase(testlib_api.WebTestCase):
         self._skip_native_sortin = None
         self.ext_api = None
         super(NeutronDbPluginV2TestCase, self).tearDown()
+
+    def setup_config(self):
+        # Create the default configurations
+        args = ['--config-file', base.etcdir('neutron.conf')]
+        # If test_config specifies some config-file, use it, as well
+        for config_file in test_lib.test_config.get('config_files', []):
+            args.extend(['--config-file', config_file])
+        super(NeutronDbPluginV2TestCase, self).setup_config(args=args)
 
     def _req(self, method, resource, data=None, fmt=None, id=None, params=None,
              action=None, subresource=None, sub_id=None, context=None):
@@ -1331,7 +1344,7 @@ fixed_ips=ip_address%%3D%s&fixed_ips=ip_address%%3D%s&fixed_ips=subnet_id%%3D%s
                                  data['port']['fixed_ips'])
 
     def test_no_more_port_exception(self):
-        with self.subnet(cidr='10.0.0.0/32', enable_dhcp=False) as subnet:
+        with self.subnet(cidr='10.0.0.0/31', enable_dhcp=False) as subnet:
             id = subnet['subnet']['network_id']
             res = self._create_port(self.fmt, id)
             data = self.deserialize(self.fmt, res)
@@ -3353,9 +3366,9 @@ class TestSubnetsV2(NeutronDbPluginV2TestCase):
     def test_create_subnet_ipv6_gw_values(self):
         cidr = '2001::/64'
         # Gateway is last IP in IPv6 DHCPv6 stateful subnet
-        gateway = '2001::ffff:ffff:ffff:fffe'
+        gateway = '2001::ffff:ffff:ffff:ffff'
         allocation_pools = [{'start': '2001::1',
-                             'end': '2001::ffff:ffff:ffff:fffd'}]
+                             'end': '2001::ffff:ffff:ffff:fffe'}]
         expected = {'gateway_ip': gateway,
                     'cidr': cidr,
                     'allocation_pools': allocation_pools}
@@ -3366,7 +3379,7 @@ class TestSubnetsV2(NeutronDbPluginV2TestCase):
         # Gateway is first IP in IPv6 DHCPv6 stateful subnet
         gateway = '2001::1'
         allocation_pools = [{'start': '2001::2',
-                             'end': '2001::ffff:ffff:ffff:fffe'}]
+                             'end': '2001::ffff:ffff:ffff:ffff'}]
         expected = {'gateway_ip': gateway,
                     'cidr': cidr,
                     'allocation_pools': allocation_pools}

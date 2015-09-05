@@ -433,21 +433,24 @@ class OVSNeutronAgent(sg_rpc.SecurityGroupAgentRpcCallbackMixin,
         # they are already gone
         if 'removed' in port_info:
             self.deleted_ports -= port_info['removed']
+        deleted_ports = list(self.deleted_ports)
         while self.deleted_ports:
             port_id = self.deleted_ports.pop()
-            # Flush firewall rules and move to dead VLAN so deleted ports no
-            # longer have access to the network
-            self.sg_agent.remove_devices_filter([port_id])
             port = self.int_br.get_vif_port_by_id(port_id)
             self._clean_network_ports(port_id)
             self.ext_manager.delete_port(self.context,
                                          {"vif_port": port,
                                           "port_id": port_id})
+            # move to dead VLAN so deleted ports no
+            # longer have access to the network
             if port:
                 # don't log errors since there is a chance someone will be
                 # removing the port from the bridge at the same time
                 self.port_dead(port, log_errors=False)
             self.port_unbound(port_id)
+        # Flush firewall rules after ports are put on dead VLAN to be
+        # more secure
+        self.sg_agent.remove_devices_filter(deleted_ports)
 
     def tunnel_update(self, context, **kwargs):
         LOG.debug("tunnel_update received")
@@ -793,7 +796,7 @@ class OVSNeutronAgent(sg_rpc.SecurityGroupAgentRpcCallbackMixin,
         devices_down = []
         port_names = [p['vif_port'].port_name for p in need_binding_ports]
         port_info = self.int_br.get_ports_attributes(
-            "Port", columns=["name", "tag"], ports=port_names)
+            "Port", columns=["name", "tag"], ports=port_names, if_exists=True)
         tags_by_name = {x['name']: x['tag'] for x in port_info}
         for port_detail in need_binding_ports:
             lvm = self.local_vlan_map.get(port_detail['network_id'])
@@ -805,6 +808,10 @@ class OVSNeutronAgent(sg_rpc.SecurityGroupAgentRpcCallbackMixin,
             device = port_detail['device']
             # Do not bind a port if it's already bound
             cur_tag = tags_by_name.get(port.port_name)
+            if cur_tag is None:
+                LOG.info(_LI("Port %s was deleted concurrently, skipping it"),
+                         port.port_name)
+                continue
             if cur_tag != lvm.vlan:
                 self.int_br.delete_flows(in_port=port.ofport)
             if self.prevent_arp_spoofing:
@@ -1006,9 +1013,13 @@ class OVSNeutronAgent(sg_rpc.SecurityGroupAgentRpcCallbackMixin,
         # Leave part of the bridge name on for easier identification
         hashlen = 6
         namelen = n_const.DEVICE_NAME_MAX_LEN - len(prefix) - hashlen
+        if isinstance(name, six.text_type):
+            hashed_name = hashlib.sha1(name.encode('utf-8'))
+        else:
+            hashed_name = hashlib.sha1(name)
         new_name = ('%(prefix)s%(truncated)s%(hash)s' %
                     {'prefix': prefix, 'truncated': name[0:namelen],
-                     'hash': hashlib.sha1(name).hexdigest()[0:hashlen]})
+                     'hash': hashed_name.hexdigest()[0:hashlen]})
         LOG.warning(_LW("Creating an interface named %(name)s exceeds the "
                         "%(limit)d character limitation. It was shortened to "
                         "%(new_name)s to fit."),

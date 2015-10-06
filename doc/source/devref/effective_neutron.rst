@@ -54,6 +54,25 @@ Happy hacking!
 Developing better software
 --------------------------
 
+Plugin development
+~~~~~~~~~~~~~~~~~~
+
+Document common pitfalls as well as good practices done during plugin development.
+
+* Use mixin classes as last resort. They can be a powerful tool to add behavior
+  but their strength is also a weakness, as they can introduce `unpredictable <https://review.openstack.org/#/c/121290/>`_
+  behavior to the `MRO <https://www.python.org/download/releases/2.3/mro/>`_,
+  amongst other issues.
+* If you make changes to the DB class methods, like calling methods that can
+  be inherited, think about what effect that may have to plugins that have
+  controller `backends <https://review.openstack.org/#/c/116924/>`_.
+* If you make changes to the ML2 plugin or components used by the ML2 plugin,
+  think about the `effect <http://lists.openstack.org/pipermail/openstack-dev/2015-October/076134.html>`_
+  that may have to other plugins.
+* When adding behavior to the L2 and L3 db base classes, do not assume that
+  there is an agent on the other side of the message broker that interacts
+  with the server. Plugins may not rely on `agents <https://review.openstack.org/#/c/174020/>`_ at all.
+
 Database interaction
 ~~~~~~~~~~~~~~~~~~~~
 
@@ -63,7 +82,22 @@ Document common pitfalls as well as good practices done during database developm
   does not raise an exception.
 * Do not get an object to delete it. If you can `delete() <http://docs.sqlalchemy.org/en/rel_1_0/orm/query.html#sqlalchemy.orm.query.Query.delete>`_
   on the query object. Read the warnings for more details about in-python cascades.
-* ...
+* For PostgreSQL if you're using GROUP BY everything in the SELECT list must be
+  an aggregate SUM(...), COUNT(...), etc or used in the GROUP BY.
+
+  The incorrect variant:
+
+  .. code:: python
+
+     q = query(Object.id, Object.name,
+               func.count(Object.number)).group_by(Object.name)
+
+  The correct variant:
+
+  .. code:: python
+
+     q = query(Object.id, Object.name,
+               func.count(Object.number)).group_by(Object.id, Object.name)
 
 System development
 ~~~~~~~~~~~~~~~~~~
@@ -100,10 +134,20 @@ For anything more elaborate, please visit the testing section.
          self.assertTrue(3 in [1, 2])
          # raise meaningless error: "AssertionError: False is not true"
 
+* Use the pattern "self.assertEqual(expected, observed)" not the opposite, it helps
+  reviewers to understand which one is the expected/observed value in non-trivial
+  assertions.
+
 Backward compatibility
 ~~~~~~~~~~~~~~~~~~~~~~
 
 Document common pitfalls as well as good practices done when extending the RPC Interfaces.
+
+* The Neutron upgrade path requires the server to support the previous version of
+  the agent. Any changes to the existing RPC methods must be compatible with the
+  previous version of the agent. Otherwise a version bump is required and the old
+  method must be kept under the previous version RPC endpoint.
+
 
 Scalability issues
 ~~~~~~~~~~~~~~~~~~
@@ -116,8 +160,12 @@ Translation and logging
 
 Document common pitfalls as well as good practices done when instrumenting your code.
 
- * Make yourself familiar with `OpenStack logging guidelines <http://specs.openstack.org/openstack/openstack-specs/specs/log-guidelines.html#definition-of-log-levels>`_
-   to avoid littering the logs with traces logged at inappropriate levels.
+* Make yourself familiar with `OpenStack logging guidelines <http://specs.openstack.org/openstack/openstack-specs/specs/log-guidelines.html#definition-of-log-levels>`_
+  to avoid littering the logs with traces logged at inappropriate levels.
+* The logger should only be passed unicode values. For example, do not pass it
+  exceptions or other objects directly (LOG.error(exc), LOG.error(port), etc.).
+  See http://docs.openstack.org/developer/oslo.log/usage.html#no-more-implicit-conversion-to-unicode-str
+  for more details.
 
 Project interfaces
 ~~~~~~~~~~~~~~~~~~
@@ -132,6 +180,20 @@ Document common pitfalls as well as good practices done when writing docstrings.
 
 Landing patches more rapidly
 ----------------------------
+
+Scoping your patch appropriately
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+* Do not make multiple changes in one patch unless absolutely necessary.
+  Cleaning up nearby functions or fixing a small bug you noticed while working
+  on something else makes the patch very difficult to review. It also makes
+  cherry-picking and reverting very difficult.
+* If a fix or feature requires code refactoring, submit the refactoring as a
+  separate patch than the one that changes the logic. Otherwise
+  it's difficult for a reviewer to tell the difference between mistakes
+  in the refactor and changes required for the fix/feature. If it's a bug fix,
+  try to implement the fix before the refactor to avoid making cherry-picks to
+  stable branches difficult.
 
 Nits and pedantic comments
 ~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -167,6 +229,13 @@ Reviewer comments
   quickly, so that the reviewer remains engaged. If you disappear for a week after
   you posted a patchset, it is very likely that the patch will end up being
   neglected.
+* Do not take negative feedback personally. Neutron is a large project with lots
+  of contributors with different opinions on how things should be done. Many come
+  from widely varying cultures and languages so the English, text-only feedback
+  can unintentionally come across as harsh. Getting a -1 means reviewers are
+  trying to help get the patch into a state that can be merged, it doesn't just
+  mean they are trying to block it. It's very rare to get a patch merged on the
+  first iteration that makes everyone happy.
 
 Commit messages
 ~~~~~~~~~~~~~~~

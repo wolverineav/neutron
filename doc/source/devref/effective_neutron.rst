@@ -155,6 +155,14 @@ For anything more elaborate, please visit the testing section.
 * Don't mimic existing tests that violate these guidelines. We are attempting to
   replace all of these so more tests like them create more work. If you need help
   writing a test, reach out to the testing lieutenants and the team on IRC.
+* Mocking open() is a dangerous practice because it can lead to unexpected
+  bugs like `bug 1503847 <https://bugs.launchpad.net/neutron/+bug/1503847>`_.
+  In fact, when the built-in open method is mocked during tests, some
+  utilities (like debtcollector) may still rely on the real thing, and may
+  end up using the mock rather what they are really looking for. If you must,
+  consider scoping by `module https://review.openstack.org/#/c/232265/`_, but
+  it is better not to mock open() at all.
+
 
 Backward compatibility
 ~~~~~~~~~~~~~~~~~~~~~~
@@ -184,6 +192,10 @@ Document common pitfalls as well as good practices done when instrumenting your 
   exceptions or other objects directly (LOG.error(exc), LOG.error(port), etc.).
   See http://docs.openstack.org/developer/oslo.log/usage.html#no-more-implicit-conversion-to-unicode-str
   for more details.
+* Don't pass exceptions into LOG.exception: it is already implicitly included
+  in the log message by Python logging module.
+* Don't use LOG.exception when there is no exception registered in current
+  thread context: Python 3.x versions before 3.5 are known to fail on it.
 
 Project interfaces
 ~~~~~~~~~~~~~~~~~~

@@ -97,8 +97,7 @@ class TestL2PopulationRpcTestCase(test_plugin.Ml2PluginV2TestCase):
         cast_patch = mock.patch(cast)
         self.mock_cast = cast_patch.start()
 
-        uptime = ('neutron.plugins.ml2.drivers.l2pop.db.L2populationDbMixin.'
-                  'get_agent_uptime')
+        uptime = ('neutron.plugins.ml2.drivers.l2pop.db.get_agent_uptime')
         uptime_patch = mock.patch(uptime, return_value=190)
         uptime_patch.start()
 
@@ -643,7 +642,7 @@ class TestL2PopulationRpcTestCase(test_plugin.Ml2PluginV2TestCase):
                 req = self.new_update_request('ports', data, p1['id'])
                 res = self.deserialize(self.fmt, req.get_response(self.api))
                 ips = res['port']['fixed_ips']
-                self.assertEqual(len(ips), 2)
+                self.assertEqual(2, len(ips))
 
                 add_expected = {'chg_ip':
                                 {p1['network_id']:
@@ -661,7 +660,7 @@ class TestL2PopulationRpcTestCase(test_plugin.Ml2PluginV2TestCase):
                 req = self.new_update_request('ports', data, p1['id'])
                 res = self.deserialize(self.fmt, req.get_response(self.api))
                 ips = res['port']['fixed_ips']
-                self.assertEqual(len(ips), 2)
+                self.assertEqual(2, len(ips))
 
                 upd_expected = {'chg_ip':
                                 {p1['network_id']:
@@ -680,7 +679,7 @@ class TestL2PopulationRpcTestCase(test_plugin.Ml2PluginV2TestCase):
                 req = self.new_update_request('ports', data, p1['id'])
                 res = self.deserialize(self.fmt, req.get_response(self.api))
                 ips = res['port']['fixed_ips']
-                self.assertEqual(len(ips), 1)
+                self.assertEqual(1, len(ips))
 
                 del_expected = {'chg_ip':
                                 {p1['network_id']:
@@ -833,8 +832,7 @@ class TestL2PopulationMechDriver(base.BaseTestCase):
         agent = mock.Mock()
         agent.host = HOST
         network_ports = ((None, agent),)
-        with mock.patch.object(l2pop_db.L2populationDbMixin,
-                               'get_agent_ip',
+        with mock.patch.object(l2pop_db, 'get_agent_ip',
                                return_value=agent_ip):
             excluded_host = HOST + '-EXCLUDE' if exclude_host else HOST
             return mech_driver._get_tunnels(network_ports, excluded_host)
@@ -860,14 +858,11 @@ class TestL2PopulationMechDriver(base.BaseTestCase):
         def agent_ip_side_effect(agent):
             return agent_ips[agent]
 
-        with mock.patch.object(l2pop_db.L2populationDbMixin,
-                               'get_agent_ip',
+        with mock.patch.object(l2pop_db, 'get_agent_ip',
                                side_effect=agent_ip_side_effect),\
-                mock.patch.object(l2pop_db.L2populationDbMixin,
-                                  'get_nondvr_active_network_ports',
+                mock.patch.object(l2pop_db, 'get_nondvr_active_network_ports',
                                   return_value=fdb_network_ports),\
-                mock.patch.object(l2pop_db.L2populationDbMixin,
-                                  'get_dvr_active_network_ports',
+                mock.patch.object(l2pop_db, 'get_dvr_active_network_ports',
                                   return_value=tunnel_network_ports):
             session = mock.Mock()
             agent = mock.Mock()

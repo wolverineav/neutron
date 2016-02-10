@@ -202,20 +202,6 @@ class L3SchedulerBaseTestCase(base.BaseTestCase):
         mock_get.assert_called_once_with(mock.ANY, self.plugin)
         self.assertEqual(expected_routers, unscheduled_routers)
 
-    def test__get_routers_to_schedule_exclude_distributed(self):
-        routers = [
-            {'id': 'foo_router1', 'distributed': True}, {'id': 'foo_router_2'}
-        ]
-        expected_routers = [{'id': 'foo_router_2'}]
-        with mock.patch.object(self.scheduler,
-                               '_get_unscheduled_routers') as mock_get:
-            mock_get.return_value = routers
-            unscheduled_routers = self.scheduler._get_routers_to_schedule(
-                mock.ANY, self.plugin,
-                router_ids=None, exclude_distributed=True)
-        mock_get.assert_called_once_with(mock.ANY, self.plugin)
-        self.assertEqual(expected_routers, unscheduled_routers)
-
     def _test__get_routers_can_schedule(self, routers, agent, target_routers):
         self.plugin.get_l3_agent_candidates.return_value = agent
         result = self.scheduler._get_routers_can_schedule(
@@ -626,7 +612,8 @@ class L3SchedulerTestBaseMixin(object):
         # test dvr agent_mode case no candidates
         router['distributed'] = True
         self.get_subnet_ids_on_router = mock.Mock()
-        self.check_dvr_serviceable_ports_on_host = mock.Mock(return_value=True)
+        self._check_dvr_serviceable_ports_on_host = mock.Mock(
+            return_value=True)
         self._check_get_l3_agent_candidates(router, agent_list, None, count=0)
 
     def test_get_l3_agent_candidates_dvr_no_vms(self):
@@ -640,7 +627,7 @@ class L3SchedulerTestBaseMixin(object):
         router['distributed'] = True
         # Test no VMs present case
         self.get_subnet_ids_on_router = mock.Mock()
-        self.check_dvr_serviceable_ports_on_host = mock.Mock(
+        self._check_dvr_serviceable_ports_on_host = mock.Mock(
             return_value=False)
         self._check_get_l3_agent_candidates(
             router, agent_list, HOST_DVR, count=0)
@@ -656,7 +643,8 @@ class L3SchedulerTestBaseMixin(object):
 
         agent_list = [self.l3_dvr_snat_agent]
         self.get_subnet_ids_on_router = mock.Mock()
-        self.check_dvr_serviceable_ports_on_host = mock.Mock(return_value=True)
+        self._check_dvr_serviceable_ports_on_host = mock.Mock(
+            return_value=True)
         self._check_get_l3_agent_candidates(router, agent_list, HOST_DVR_SNAT)
 
     def test_get_l3_agent_candidates_dvr_snat_no_vms(self):
@@ -669,11 +657,11 @@ class L3SchedulerTestBaseMixin(object):
         router['distributed'] = True
 
         agent_list = [self.l3_dvr_snat_agent]
-        self.check_dvr_serviceable_ports_on_host = mock.Mock(
+        self._check_dvr_serviceable_ports_on_host = mock.Mock(
             return_value=False)
         # Test no VMs present case
         self.get_subnet_ids_on_router = mock.Mock()
-        self.check_dvr_serviceable_ports_on_host.return_value = False
+        self._check_dvr_serviceable_ports_on_host.return_value = False
         self._check_get_l3_agent_candidates(
             router, agent_list, HOST_DVR_SNAT, count=1)
 

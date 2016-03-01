@@ -27,6 +27,7 @@ from neutron._i18n import _LE, _LI
 from neutron.agent.l2.extensions import manager as ext_manager
 from neutron.agent import rpc as agent_rpc
 from neutron.agent import securitygroups_rpc as sg_rpc
+from neutron.api.rpc.callbacks import resources
 from neutron.common import config as common_config
 from neutron.common import constants
 from neutron.common import topics
@@ -84,12 +85,14 @@ class CommonAgentLoop(service.Service):
         configurations = {'extensions': self.ext_manager.names()}
         configurations.update(self.mgr.get_agent_configurations())
 
+        #TODO(mangelajo): optimize resource_versions (see ovs agent)
         self.agent_state = {
             'binary': self.agent_binary,
             'host': cfg.CONF.host,
             'topic': constants.L2_AGENT_TOPIC,
             'configurations': configurations,
             'agent_type': self.agent_type,
+            'resource_versions': resources.LOCAL_RESOURCE_VERSIONS,
             'start_flag': True}
 
         report_interval = cfg.CONF.AGENT.report_interval
@@ -97,6 +100,10 @@ class CommonAgentLoop(service.Service):
             heartbeat = loopingcall.FixedIntervalLoopingCall(
                 self._report_state)
             heartbeat.start(interval=report_interval)
+
+        # The initialization is complete; we can start receiving messages
+        self.connection.consume_in_threads()
+
         self.daemon_loop()
 
     def stop(self, graceful=True):
@@ -152,7 +159,8 @@ class CommonAgentLoop(service.Service):
         consumers = self.mgr.get_rpc_consumers()
         self.connection = agent_rpc.create_consumers(self.endpoints,
                                                      self.topic,
-                                                     consumers)
+                                                     consumers,
+                                                     start_listening=False)
 
     def init_extension_manager(self, connection):
         ext_manager.register_opts(cfg.CONF)

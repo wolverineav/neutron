@@ -19,7 +19,8 @@ from neutron._i18n import _
 DEFAULT_BRIDGE_MAPPINGS = []
 DEFAULT_INTERFACE_MAPPINGS = []
 DEFAULT_VXLAN_GROUP = '224.0.0.1'
-
+DEFAULT_KERNEL_HZ_VALUE = 250  # [Hz]
+DEFAULT_TC_TBF_LATENCY = 50  # [ms]
 
 vxlan_opts = [
     cfg.BoolOpt('enable_vxlan', default=True,
@@ -44,6 +45,12 @@ vxlan_opts = [
                 help=_("Extension to use alongside ml2 plugin's l2population "
                        "mechanism driver. It enables the plugin to populate "
                        "VXLAN forwarding table.")),
+    cfg.BoolOpt('arp_responder', default=False,
+                help=_("Enable local ARP responder which provides local "
+                       "responses instead of performing ARP broadcast into "
+                       "the overlay. Enabling local ARP responder is not fully"
+                       "compatible with the allowed-address-pairs extension.")
+                ),
 ]
 
 bridge_opts = [
@@ -62,6 +69,19 @@ bridge_opts = [
                 help=_("List of <physical_network>:<physical_bridge>")),
 ]
 
+qos_options = [
+    cfg.IntOpt('kernel_hz', default=DEFAULT_KERNEL_HZ_VALUE,
+               help=_("Value of host kernel tick rate (hz) for calculating "
+                      "minimum burst value in bandwidth limit rules for "
+                      "a port with QoS. See kernel configuration file for "
+                      "HZ value and tc-tbf manual for more information.")),
+    cfg.IntOpt('tbf_latency', default=DEFAULT_TC_TBF_LATENCY,
+               help=_("Value of latency (ms) for calculating size of queue "
+                      "for a port with QoS. See tc-tbf manual for more "
+                      "information."))
+]
+
 
 cfg.CONF.register_opts(vxlan_opts, "VXLAN")
 cfg.CONF.register_opts(bridge_opts, "LINUX_BRIDGE")
+cfg.CONF.register_opts(qos_options, "QOS")

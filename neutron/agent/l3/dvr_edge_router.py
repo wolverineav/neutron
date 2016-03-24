@@ -174,6 +174,9 @@ class DvrEdgeRouter(dvr_local_router.DvrLocalRouter):
         return host == self.host
 
     def _handle_router_snat_rules(self, ex_gw_port, interface_name):
+        super(DvrEdgeRouter, self)._handle_router_snat_rules(
+            ex_gw_port, interface_name)
+
         if not self._is_this_snat_host():
             return
         if not self.get_ex_gw_port():
@@ -186,7 +189,8 @@ class DvrEdgeRouter(dvr_local_router.DvrLocalRouter):
         with self.snat_iptables_manager.defer_apply():
             self._empty_snat_chains(self.snat_iptables_manager)
 
-            # NOTE DVR doesn't add the jump to float snat like the super class.
+            # NOTE: DVR adds the jump to float snat via super class,
+            # but that is in the router namespace and not snat.
 
             self._add_snat_rules(ex_gw_port, self.snat_iptables_manager,
                                  interface_name)
@@ -216,8 +220,10 @@ class DvrEdgeRouter(dvr_local_router.DvrLocalRouter):
 
         if not self._is_this_snat_host():
             return
+        if not self.snat_iptables_manager:
+            LOG.debug("DVR router: no snat rules to be handled")
+            return
 
-        snat_iptables_manager = self.snat_iptables_manager
         # Prepare address scope iptables rule for dvr snat interfaces
         internal_ports = self.get_snat_interfaces()
         ports_scopemark = self._get_port_devicename_scopemark(
@@ -232,6 +238,6 @@ class DvrEdgeRouter(dvr_local_router.DvrLocalRouter):
                 ports_scopemark[ip_version].update(
                     external_port_scopemark[ip_version])
 
-        with snat_iptables_manager.defer_apply():
+        with self.snat_iptables_manager.defer_apply():
             self._add_address_scope_mark(
-                snat_iptables_manager, ports_scopemark)
+                self.snat_iptables_manager, ports_scopemark)
